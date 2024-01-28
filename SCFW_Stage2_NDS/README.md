@@ -1,0 +1,1 @@
+Dummy for now, just http://www.cryptosystem.org/archives/2007/01/simple-gba-mode-switcher/
