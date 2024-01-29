@@ -204,7 +204,7 @@ int main() {
 								SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
 								SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
 								SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_PROGRAM;
-								GBA_BUS[i>>1] = filebuf[i] | (filebuf[i+1] << 8);
+								GBA_BUS[(total_bytes + i)>>1] = filebuf[i] | (filebuf[i+1] << 8);
 	
 								while (*GBA_BUS != *GBA_BUS) {	
 								}
