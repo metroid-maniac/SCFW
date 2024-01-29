@@ -58,7 +58,7 @@ int main() {
 
 	fseek(kernel, 0, SEEK_END);
 	u32 kernel_size = ftell(kernel);
-	if (kernel_size > 0x02000000) {
+	if (kernel_size > 0x40000) {
 		iprintf("Kernel too large to load!\n");
 		waitForever();
 	}
