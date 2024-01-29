@@ -40,9 +40,13 @@ void sc_mode(u32 mode)
 
 EWRAM_BSS u8 filebuf[0x20000];
 
+
 int main() {
 	irqInit();
 	irqEnable(IRQ_VBLANK);
+
+	scanKeys();
+	keysDownRepeat();
 
 	consoleDemoInit();
 
@@ -72,7 +76,7 @@ int main() {
 			iprintf("\x1b[2J");
 			iprintf("%s\n", cwd);
 			iprintf("%s\n", dirent->d_name);
-			
+
 			u32 pressed;
 			do {
 				scanKeys();
@@ -83,8 +87,13 @@ int main() {
 			if (pressed & KEY_A) {
 				FILE *rom = fopen(dirent->d_name, "rb");
 
+				fseek(rom, 0, SEEK_END);
+				u32 romsize = ftell(rom);
+				fseek(rom, 0, SEEK_SET);
+
 				u32 total_bytes = 0;
 				u32 bytes = 0;
+				iprintf("Loading ROM:\n\n");
 				do {
 					bytes = fread(filebuf, 1, sizeof filebuf, rom);
 					sc_mode(SC_RAM_RW);
@@ -97,7 +106,7 @@ int main() {
 					}
 					sc_mode(SC_MEDIA);
 					total_bytes += bytes;
-					iprintf("Bytes read: 0x%x\n", total_bytes);
+					iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
 				} while (bytes);
 
 				sc_mode(SC_RAM_RO);
