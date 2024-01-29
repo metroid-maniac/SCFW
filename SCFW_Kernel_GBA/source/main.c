@@ -63,21 +63,29 @@ int main() {
 		char cwd[PATH_MAX];
 		getcwd(cwd, PATH_MAX);
 		DIR *dir = opendir(".");
+		long diroffs[0x200];
+		u32 diroffs_len = 0;
 		for (;;) {
+			long diroff = telldir(dir);
 			struct dirent *dirent = readdir(dir);
-			if (!dirent) {
-				rewinddir(dir);
-				dirent = readdir(dir);
-			}
-			if (!dirent) {
-				tryAgain();
-			}
+			if (!dirent)
+				break;
 			if (!strcmp(dirent->d_name, "."))
 				continue;
+			diroffs[diroffs_len++] = diroff;
+		}
+		if (!diroffs_len) {
+			iprintf("No directory entries!\n");
+			tryAgain();
+		}
+
+		for (int i = 0;;) {
+			seekdir(dir, diroffs[i]);
+			struct dirent *dirent = readdir(dir);
 
 			iprintf("\x1b[2J");
 			iprintf("%s\n", cwd);
-			iprintf("%s\n", dirent->d_name);
+			iprintf("%ld: %s\n", i, dirent->d_name);
 
 			u32 pressed;
 			do {
@@ -118,6 +126,20 @@ int main() {
 					chdir(dirent->d_name);
 					break;
 				}
+			}
+			if (pressed & KEY_B) {
+				chdir("..");
+				break;
+			}
+			if (pressed & KEY_DOWN) {
+				++i;
+				if (i >= diroffs_len)
+					i -= diroffs_len;
+			}
+			if (pressed & KEY_UP) {
+				--i;
+				if (i < 0)
+					i += diroffs_len;
 			}
 		}
 		closedir(dir);
