@@ -38,7 +38,7 @@ void sc_mode(u32 mode)
     *(vu16*)0x9FFFFFE = mode;
 }
 
-EWRAM_BSS u8 filebuf[0x20000];
+EWRAM_DATA u8 filebuf[0x4000];
 
 
 int main() {
