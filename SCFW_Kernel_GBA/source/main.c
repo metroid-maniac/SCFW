@@ -82,6 +82,7 @@ int main() {
 		for (int i = 0;;) {
 			seekdir(dir, diroffs[i]);
 			struct dirent *dirent = readdir(dir);
+			u32 namelen = strlen(dirent->d_name);
 
 			iprintf("\x1b[2J");
 			iprintf("%s\n", cwd);
@@ -92,10 +93,13 @@ int main() {
 				scanKeys();
 				pressed = keysDownRepeat();
 				VBlankIntrWait();
-			} while (!pressed);
+			} while (!(pressed & (KEY_A | KEY_B | KEY_UP | KEY_DOWN)));
 
 			if (pressed & KEY_A) {
-				if (dirent->d_type != DT_DIR) {
+				if (dirent->d_type == DT_DIR) {
+					chdir(dirent->d_name);
+					break;
+				} else if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".gba")) {
 					FILE *rom = fopen(dirent->d_name, "rb");
 
 					fseek(rom, 0, SEEK_END);
@@ -123,8 +127,12 @@ int main() {
 					sc_mode(SC_RAM_RO);
 					SoftReset(ROM_RESTART);
 				} else {
-					chdir(dirent->d_name);
-					break;
+					iprintf("Unrecognised file extension!\n");
+					do {
+						scanKeys();
+						pressed = keysDownRepeat();
+						VBlankIntrWait();
+					} while (!(pressed & KEY_A));
 				}
 			}
 			if (pressed & KEY_B) {
