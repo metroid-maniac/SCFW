@@ -15,10 +15,13 @@ enum
 
 void sc_mode(u32 mode)
 {
+    u32 ime = REG_IME;
+    REG_IME = 0;
     *(vu16*)0x9FFFFFE = 0xA55A;
     *(vu16*)0x9FFFFFE = 0xA55A;
     *(vu16*)0x9FFFFFE = mode;
     *(vu16*)0x9FFFFFE = mode;
+    REG_IME = ime;
 }
 
 
