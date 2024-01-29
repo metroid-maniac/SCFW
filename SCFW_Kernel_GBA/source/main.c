@@ -72,6 +72,8 @@ int main() {
 			if (!dirent) {
 				tryAgain();
 			}
+			if (!strcmp(dirent->d_name, "."))
+				continue;
 
 			iprintf("\x1b[2J");
 			iprintf("%s\n", cwd);
@@ -85,34 +87,40 @@ int main() {
 			} while (!pressed);
 
 			if (pressed & KEY_A) {
-				FILE *rom = fopen(dirent->d_name, "rb");
+				if (dirent->d_type != DT_DIR) {
+					FILE *rom = fopen(dirent->d_name, "rb");
 
-				fseek(rom, 0, SEEK_END);
-				u32 romsize = ftell(rom);
-				fseek(rom, 0, SEEK_SET);
+					fseek(rom, 0, SEEK_END);
+					u32 romsize = ftell(rom);
+					fseek(rom, 0, SEEK_SET);
 
-				u32 total_bytes = 0;
-				u32 bytes = 0;
-				iprintf("Loading ROM:\n\n");
-				do {
-					bytes = fread(filebuf, 1, sizeof filebuf, rom);
-					sc_mode(SC_RAM_RW);
-					for (u32 i = 0; i < bytes; i += 4) {
-						GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
-							if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-								iprintf("SDRAM write failed!\n");
-								tryAgain();
-							}
-					}
-					sc_mode(SC_MEDIA);
-					total_bytes += bytes;
-					iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-				} while (bytes);
+					u32 total_bytes = 0;
+					u32 bytes = 0;
+					iprintf("Loading ROM:\n\n");
+					do {
+						bytes = fread(filebuf, 1, sizeof filebuf, rom);
+						sc_mode(SC_RAM_RW);
+						for (u32 i = 0; i < bytes; i += 4) {
+							GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
+								if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
+									iprintf("SDRAM write failed!\n");
+									tryAgain();
+								}
+						}
+						sc_mode(SC_MEDIA);
+						total_bytes += bytes;
+						iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
+					} while (bytes);
 
-				sc_mode(SC_RAM_RO);
-				SoftReset(ROM_RESTART);
+					sc_mode(SC_RAM_RO);
+					SoftReset(ROM_RESTART);
+				} else {
+					chdir(dirent->d_name);
+					break;
+				}
 			}
 		}
+		closedir(dir);
 	}
 
 
