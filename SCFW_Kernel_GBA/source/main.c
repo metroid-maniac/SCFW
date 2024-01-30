@@ -153,7 +153,7 @@ int main() {
 					} while (!pressed);
 					u32 ime = REG_IME;
 					REG_IME = 0;	
-					if (pressed & KEY_A) do {
+					if (pressed & KEY_A) {
 						iprintf("Opening firmware\n");
 						FILE *fw = fopen(dirent->d_name, "rb");
 						fseek(fw, 0, SEEK_END);
@@ -161,7 +161,7 @@ int main() {
 						fseek(fw, 0, SEEK_SET);
 						if (fwsize > 0x80000) {
 							iprintf("Firmware too large!\n");
-							break;
+							goto fw_flash_end;
 						}
 
 						iprintf("Probing flash ID.\n");
@@ -175,7 +175,7 @@ int main() {
 						iprintf("Flash ID is 0x%x\n", flash_id);
 						if (flash_id != 0x000422b9) {
 							iprintf("Unrecognised flash ID.");
-							break;
+							goto fw_flash_end;
 						}
 
 						iprintf("Erasing flash.\n");
@@ -197,7 +197,7 @@ int main() {
 							bytes = fread(filebuf, 1, sizeof filebuf, fw);
 							if (ferror(fw)) {
 								iprintf("Error reading file!\n");
-								break;
+								goto fw_flash_end;
 							}
 							sc_mode(SC_FLASH_RW);
 							for (u32 i = 0; i < bytes; i += 2) {
@@ -216,7 +216,10 @@ int main() {
 						} while (bytes);
 
 						iprintf("Done!\n");
-					} while (0);
+						fw_flash_end:
+						if (fw)
+							fclose(fw);
+					}
 					REG_IME = ime;
 					iprintf("Press A to continue.\n");
 					do {
