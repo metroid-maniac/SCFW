@@ -27,7 +27,7 @@ INCLUDES	:=
 #---------------------------------------------------------------------------------
 ARCH	:=	-v -mthumb -mthumb-interwork
 
-CFLAGS	:=	-g -Wall -O0 -std=c99\
+CFLAGS	:=	-g -Wall -Os -std=c99\
 		-mcpu=arm7tdmi -mtune=arm7tdmi\
 		$(ARCH)
 
