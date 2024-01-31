@@ -63,6 +63,137 @@ EWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
 
+void selectFile(char *file) {
+	u32 namelen = strlen(file);
+	if (namelen > 4 && !strcmp(file + namelen - 4, ".gba")) {
+		FILE *rom = fopen(file, "rb");
+		fseek(rom, 0, SEEK_END);
+		u32 romsize = ftell(rom);
+		fseek(rom, 0, SEEK_SET);
+
+		u32 total_bytes = 0;
+		u32 bytes = 0;
+		iprintf("Loading ROM:\n\n");
+		do {
+			bytes = fread(filebuf, 1, sizeof filebuf, rom);
+			sc_mode(SC_RAM_RW);
+			for (u32 i = 0; i < bytes; i += 4) {
+				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
+				if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
+					iprintf("SDRAM write failed!\n");
+					tryAgain();
+				}
+			}
+			sc_mode(SC_MEDIA);
+			total_bytes += bytes;
+			iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
+		} while (bytes);
+
+		sc_mode(SC_RAM_RO);
+		SoftReset(ROM_RESTART);
+	} else if (namelen > 4 && !strcmp(file + namelen - 4, ".frm")) {
+		u32 ime = REG_IME;
+		REG_IME = 0;
+
+		iprintf("Probing flash ID.\n");
+		sc_mode(SC_FLASH_RW);
+		SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+		SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+		SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
+		u32 flash_id = SC_FLASH_MAGIC_ADDR_1;
+		flash_id |= *GBA_BUS << 16;
+		*GBA_BUS = SC_FLASH_IDLE;
+		iprintf("Flash ID is 0x%x\n", flash_id);
+		if (((flash_id >> 8) & 0xff) != 0x22) {
+			iprintf("Unrecognised flash ID.");
+			goto fw_end;
+		}
+		REG_IME = ime;
+
+		iprintf("Flash the Supercard firmware?\n"
+		        "It may brick your Supercard!\n"
+		        "Press A to flash.\n"
+		        "Press any other key to cancel.\n");
+		do {
+			scanKeys();
+			pressed = keysDownRepeat();
+			VBlankIntrWait();
+		} while (!pressed);
+		if (pressed & KEY_A) {
+			sc_mode(SC_MEDIA);
+			iprintf("Opening firmware\n");
+			FILE *fw = fopen(file, "rb");
+			fseek(fw, 0, SEEK_END);
+			u32 fwsize = ftell(fw);
+			fseek(fw, 0, SEEK_SET);
+			if (fwsize > 0x80000) {
+				iprintf("Firmware too large!\n");
+				goto fw_flash_end;
+			}
+
+			ime = 0;
+			iprintf("Erasing flash.\n");
+			sc_mode(SC_FLASH_RW);
+			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+			SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE;
+			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+			SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE_CHIP;
+
+			while (*GBA_BUS != *GBA_BUS) {
+			}
+			*GBA_BUS = SC_FLASH_IDLE;
+
+			u32 total_bytes = 0;
+			u32 bytes = 0;
+			iprintf("Programming flash.\n\n");
+			do {
+				sc_mode(SC_MEDIA);
+				bytes = fread(filebuf, 1, sizeof filebuf, fw);
+				if (ferror(fw)) {
+					iprintf("Error reading file!\n");
+					goto fw_flash_end;
+				}
+				sc_mode(SC_FLASH_RW);
+				for (u32 i = 0; i < bytes; i += 2) {
+					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+					SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_PROGRAM;
+					GBA_BUS[(total_bytes + i)>>1] = filebuf[i] | (filebuf[i+1] << 8);
+
+					while (*GBA_BUS != *GBA_BUS) {
+					}
+					*GBA_BUS = SC_FLASH_IDLE;
+				}
+				sc_mode(SC_MEDIA);
+				total_bytes += bytes;
+				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, fwsize);
+			} while (bytes);
+
+			iprintf("Done!\n");
+			fw_flash_end:
+			if (fw)
+				fclose(fw);
+		}
+		fw_end:
+		REG_IME = ime;
+		iprintf("Press A to continue.\n");
+		do {
+			scanKeys();
+			pressed = keysDownRepeat();
+			VBlankIntrWait();
+		} while (!(pressed & KEY_A));
+	} else {
+		iprintf("Unrecognised file extension!\n");
+		do {
+			scanKeys();
+			pressed = keysDownRepeat();
+			VBlankIntrWait();
+		} while (!(pressed & KEY_A));
+	}
+}
+
 int main() {
 	irqInit();
 	irqEnable(IRQ_VBLANK);
@@ -124,7 +255,6 @@ int main() {
 		for (int i = 0;;) {
 			seekdir(dir, diroffs[i]);
 			struct dirent *dirent = readdir(dir);
-			u32 namelen = strlen(dirent->d_name);
 
 			iprintf("\x1b[2J");
 			iprintf("%s\n", cwd);
@@ -140,132 +270,8 @@ int main() {
 				if (dirent->d_type == DT_DIR) {
 					chdir(dirent->d_name);
 					break;
-				} else if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".gba")) {
-					FILE *rom = fopen(dirent->d_name, "rb");
-
-					fseek(rom, 0, SEEK_END);
-					u32 romsize = ftell(rom);
-					fseek(rom, 0, SEEK_SET);
-
-					u32 total_bytes = 0;
-					u32 bytes = 0;
-					iprintf("Loading ROM:\n\n");
-					do {
-						bytes = fread(filebuf, 1, sizeof filebuf, rom);
-						sc_mode(SC_RAM_RW);
-						for (u32 i = 0; i < bytes; i += 4) {
-							GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
-								if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-									iprintf("SDRAM write failed!\n");
-									tryAgain();
-								}
-						}
-						sc_mode(SC_MEDIA);
-						total_bytes += bytes;
-						iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-					} while (bytes);
-
-					sc_mode(SC_RAM_RO);
-					SoftReset(ROM_RESTART);
-				} else if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".frm")) {
-					u32 ime = REG_IME;
-					REG_IME = 0;
-
-					iprintf("Probing flash ID.\n");
-					sc_mode(SC_FLASH_RW);
-					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-					SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
-					u32 flash_id = SC_FLASH_MAGIC_ADDR_1;
-					flash_id |= *GBA_BUS << 16;
-					*GBA_BUS = SC_FLASH_IDLE;
-					iprintf("Flash ID is 0x%x\n", flash_id);
-					if ((flash_id >> 8) & 0xff != 0x22) {
-						iprintf("Unrecognised flash ID.");
-						goto fw_end;
-					}
-					REG_IME = ime;
-
-					iprintf("Flash the Supercard firmware?\n"
-					        "It may brick your Supercard!\n"
-					        "Press A to flash.\n"
-					        "Press any other key to cancel.\n");
-					do {
-						scanKeys();
-						pressed = keysDownRepeat();
-						VBlankIntrWait();
-					} while (!pressed);
-					if (pressed & KEY_A) {
-						sc_mode(SC_MEDIA);
-						iprintf("Opening firmware\n");
-						FILE *fw = fopen(dirent->d_name, "rb");
-						fseek(fw, 0, SEEK_END);
-						u32 fwsize = ftell(fw);
-						fseek(fw, 0, SEEK_SET);
-						if (fwsize > 0x80000) {
-							iprintf("Firmware too large!\n");
-							goto fw_flash_end;
-						}
-
-						ime = 0;
-						iprintf("Erasing flash.\n");
-						sc_mode(SC_FLASH_RW);
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-						SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE;
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-						SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE_CHIP;
-						while (*GBA_BUS != *GBA_BUS) {
-						}
-						*GBA_BUS = SC_FLASH_IDLE;
-					
-						u32 total_bytes = 0;
-						u32 bytes = 0;
-						iprintf("Programming flash.\n\n");
-						do {
-							sc_mode(SC_MEDIA);
-							bytes = fread(filebuf, 1, sizeof filebuf, fw);
-							if (ferror(fw)) {
-								iprintf("Error reading file!\n");
-								goto fw_flash_end;
-							}
-							sc_mode(SC_FLASH_RW);
-							for (u32 i = 0; i < bytes; i += 2) {
-								SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-								SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-								SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_PROGRAM;
-								GBA_BUS[(total_bytes + i)>>1] = filebuf[i] | (filebuf[i+1] << 8);
-	
-								while (*GBA_BUS != *GBA_BUS) {	
-								}
-								*GBA_BUS = SC_FLASH_IDLE;
-							}
-							sc_mode(SC_MEDIA);
-							total_bytes += bytes;
-							iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, fwsize);
-						} while (bytes);
-
-						iprintf("Done!\n");
-						fw_flash_end:
-						if (fw)
-							fclose(fw);
-					}
-					fw_end:
-					REG_IME = ime;
-					iprintf("Press A to continue.\n");
-					do {
-						scanKeys();
-						pressed = keysDownRepeat();
-						VBlankIntrWait();
-					} while (!(pressed & KEY_A));
 				} else {
-					iprintf("Unrecognised file extension!\n");
-					do {
-						scanKeys();
-						pressed = keysDownRepeat();
-						VBlankIntrWait();
-					} while (!(pressed & KEY_A));
+					selectFile(dirent->d_name);
 				}
 			}
 			if (pressed & KEY_B) {
