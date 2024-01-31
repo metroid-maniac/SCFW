@@ -21,6 +21,11 @@ void tryAgain() {
 	}
 }
 
+__attribute__((packed)) struct settings {
+};
+struct settings settings;
+FILE *settings_file;
+
 #define GBA_ROM ((vu32*) 0x08000000)
 #define GBA_BUS ((vu16*) 0x08000000)
 
@@ -56,6 +61,7 @@ void sc_mode(u32 mode)
 
 EWRAM_DATA u8 filebuf[0x4000];
 
+u32 pressed;
 
 int main() {
 	irqInit();
@@ -73,6 +79,26 @@ int main() {
 	} else {
 		iprintf("FAT initialisation failed!\n");
 		tryAgain();
+	}
+
+	settings_file = fopen("scfw/settings.bin", "ab+");
+	if (settings_file) {
+		fseek(settings_file, 0, SEEK_SET);
+		struct settings loaded_settings = settings;
+		fread(&loaded_settings, sizeof loaded_settings, 1, settings_file);
+		if (memcmp(&loaded_settings, &settings, sizeof settings)) {
+			settings = loaded_settings;
+			ftruncate(settings_file->_file, 0);
+			fwrite(&settings, sizeof settings, 1, settings_file);
+		}
+	} else {
+		iprintf("Failed to load settings file!\n"
+		        "Press A to continue.\n");
+		do {
+			scanKeys();
+			pressed = keysDownRepeat();
+			VBlankIntrWait();
+		} while (!(pressed & KEY_A));
 	}
 
 	for (;;) {
@@ -104,7 +130,6 @@ int main() {
 			iprintf("%s\n", cwd);
 			iprintf("%ld: %s\n", i, dirent->d_name);
 
-			u32 pressed;
 			do {
 				scanKeys();
 				pressed = keysDownRepeat();
