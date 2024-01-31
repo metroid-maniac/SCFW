@@ -143,17 +143,35 @@ int main() {
 					sc_mode(SC_RAM_RO);
 					SoftReset(ROM_RESTART);
 				} else if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".frm")) {
-					iprintf("Flash this Supercard firmware?\n"
-					        "This may brick your Supercard!\n"
-					        "Press A to flash or any other key to cancel.\n");
+					u32 ime = REG_IME;
+					REG_IME = 0;
+
+					iprintf("Probing flash ID.\n");
+					sc_mode(SC_FLASH_RW);
+					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+					SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
+					u32 flash_id = SC_FLASH_MAGIC_ADDR_1;
+					flash_id |= *GBA_BUS << 16;
+					*GBA_BUS = SC_FLASH_IDLE;
+					iprintf("Flash ID is 0x%x\n", flash_id);
+					if ((flash_id >> 8) & 0xff != 0x22) {
+						iprintf("Unrecognised flash ID.");
+						goto fw_end;
+					}
+					REG_IME = ime;
+
+					iprintf("Flash the Supercard firmware?\n"
+					        "It may brick your Supercard!\n"
+					        "Press A to flash.\n"
+					        "Press any other key to cancel.\n");
 					do {
 						scanKeys();
 						pressed = keysDownRepeat();
 						VBlankIntrWait();
 					} while (!pressed);
-					u32 ime = REG_IME;
-					REG_IME = 0;	
 					if (pressed & KEY_A) {
+						sc_mode(SC_MEDIA);
 						iprintf("Opening firmware\n");
 						FILE *fw = fopen(dirent->d_name, "rb");
 						fseek(fw, 0, SEEK_END);
@@ -164,21 +182,9 @@ int main() {
 							goto fw_flash_end;
 						}
 
-						iprintf("Probing flash ID.\n");
-						sc_mode(SC_FLASH_RW);
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-						SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
-						u32 flash_id = SC_FLASH_MAGIC_ADDR_1;
-						flash_id |= *GBA_BUS << 16;
-						*GBA_BUS = SC_FLASH_IDLE;
-						iprintf("Flash ID is 0x%x\n", flash_id);
-						if (flash_id != 0x000422b9) {
-							iprintf("Unrecognised flash ID.");
-							goto fw_flash_end;
-						}
-
+						ime = 0;
 						iprintf("Erasing flash.\n");
+						sc_mode(SC_FLASH_RW);
 						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
 						SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
 						SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE;
@@ -220,6 +226,7 @@ int main() {
 						if (fw)
 							fclose(fw);
 					}
+					fw_end:
 					REG_IME = ime;
 					iprintf("Press A to continue.\n");
 					do {
