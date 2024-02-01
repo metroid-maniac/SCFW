@@ -226,14 +226,13 @@ int main() {
 		tryAgain();
 	}
 
-	settings_file = fopen("scfw/settings.bin", "ab+");
+	settings_file = fopen("/scfw/settings.bin", "rb+");
 	if (settings_file) {
-		fseek(settings_file, 0, SEEK_SET);
 		struct settings loaded_settings = settings;
 		fread(&loaded_settings, sizeof loaded_settings, 1, settings_file);
 		if (memcmp(&loaded_settings, &settings, sizeof settings)) {
 			settings = loaded_settings;
-			ftruncate(settings_file->_file, 0);
+			freopen("/scfw/settings.bin", "wb", settings_file);
 			fwrite(&settings, sizeof settings, 1, settings_file);
 		}
 	} else {
