@@ -39,7 +39,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW v0.1 GBA-mode\n\n");
+	iprintf("SCFW v0.2 GBA-mode\n\n");
 
 	if (fatInitDefault()) {
 		iprintf("FAT system initialised\n");
