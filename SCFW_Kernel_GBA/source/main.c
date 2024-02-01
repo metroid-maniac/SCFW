@@ -64,12 +64,11 @@ EWRAM_DATA u8 filebuf[0x4000];
 u32 pressed;
 
 void setLastPlayed(char *path) {
-	FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "ab+");
+	FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "rb");
 	char old_path[PATH_MAX];
-	fseek(lastPlayed, 0, SEEK_SET);
 	fread(old_path, PATH_MAX, 1, lastPlayed);
 	if (strcmp(path, old_path)) {
-		ftruncate(settings_file->_file, 0);
+		freopen("/scfw/lastplayed.txt", "wb", lastPlayed);
 		fwrite(path, strlen(path), 1, lastPlayed);
 	}
 	fclose(lastPlayed);
@@ -287,11 +286,11 @@ int main() {
 					chdir(dirent->d_name);
 					break;
 				} else {
-					// inefficient, idc
 					char path[PATH_MAX];
-					strncpy(path, cwd, PATH_MAX);
-					strncpy(path, "/", PATH_MAX);
-					strncpy(path, dirent->d_name, PATH_MAX);
+					char *ptr = stpcpy(path, cwd);
+					if (ptr[-1] != '/')
+						ptr = stpcpy(ptr, "/");
+					ptr = stpcpy(ptr, dirent->d_name);
 					selectFile(path);
 				}
 			}
