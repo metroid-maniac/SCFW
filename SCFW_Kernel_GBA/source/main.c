@@ -23,9 +23,12 @@ void tryAgain() {
 	}
 }
 
-__attribute__((packed)) struct settings {
+__attribute__((packed)) struct settings { 
+	u8 autosave;
 };
-struct settings settings;
+struct settings settings = {
+	.autosave = 1
+};
 FILE *settings_file;
 
 union paging_index {
@@ -38,6 +41,7 @@ union paging_index {
 
 #define GBA_ROM ((vu32*) 0x08000000)
 #define GBA_BUS ((vu16*) 0x08000000)
+#define GBA_SRAM ((vu8*) 0x0e000000)
 
 #define SC_FLASH_MAGIC_ADDR_1 (*(vu16*) 0x08000b92)
 #define SC_FLASH_MAGIC_ADDR_2 (*(vu16*) 0x0800046c)
@@ -74,6 +78,7 @@ EWRAM_DATA u8 filebuf[0x4000];
 u32 pressed;
 
 void setLastPlayed(char *path) {
+	/*
 	FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "rb");
 	char old_path[PATH_MAX];
 	fread(old_path, PATH_MAX, 1, lastPlayed);
@@ -81,6 +86,10 @@ void setLastPlayed(char *path) {
 		freopen("/scfw/lastplayed.txt", "wb", lastPlayed);
 		fwrite(path, strlen(path), 1, lastPlayed);
 	}
+	fclose(lastPlayed);
+	*/
+	FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "wb");
+	fwrite(path, strlen(path), 1, lastPlayed);
 	fclose(lastPlayed);
 }
 
@@ -109,6 +118,33 @@ void selectFile(char *path) {
 			total_bytes += bytes;
 			iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
 		} while (bytes);
+		fclose(rom);
+
+		if (settings.autosave) {
+			char savname[PATH_MAX];
+			strcpy(savname, path);
+			strcpy(savname + pathlen - 4, ".sav");
+
+			FILE *sav = fopen(savname, "ab");
+			freopen(savname, "rb", sav);
+			iprintf("Loading SRAM:\n\n");
+			total_bytes = 0;
+			bytes = 0;
+			do {
+				bytes = fread(filebuf, 1, sizeof filebuf, sav);
+				sc_mode(SC_RAM_RO);
+				for (int i = 0; i < bytes; ++i)
+					GBA_SRAM[total_bytes + i] = filebuf[i];
+				sc_mode(SC_MEDIA);
+				total_bytes += bytes;
+				iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", total_bytes);
+			} while (bytes);
+			fclose(sav);
+
+			FILE *lastSaved = fopen("/scfw/lastsaved.txt", "wb");
+			fwrite(savname, pathlen, 1, lastSaved);
+			fclose(lastSaved);
+		}
 
 		iprintf("Let's go.\n");
 		setLastPlayed(path);
@@ -236,7 +272,7 @@ int main() {
 		tryAgain();
 	}
 
-	settings_file = fopen("/scfw/settings.bin", "rb+");
+	settings_file = fopen("/scfw/settings.bin", "rb");
 	if (settings_file) {
 		struct settings loaded_settings = settings;
 		fread(&loaded_settings, sizeof loaded_settings, 1, settings_file);
@@ -246,13 +282,29 @@ int main() {
 			fwrite(&settings, sizeof settings, 1, settings_file);
 		}
 	} else {
-		iprintf("Failed to load settings file!\n"
-		        "Press A to continue.\n");
-		do {
-			scanKeys();
-			pressed = keysDownRepeat();
-			VBlankIntrWait();
-		} while (!(pressed & KEY_A));
+		settings_file = fopen("/scfw/settings.bin", "wb");
+		fwrite(&settings, sizeof settings, 1, settings_file);
+	}
+	fclose(settings_file);
+
+	if (settings.autosave) {
+		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
+		if (lastSaved) {
+			char path[PATH_MAX];
+			fread(path, PATH_MAX, 1, lastSaved);
+			iprintf("Saving SRAM to %s\n\n", path);
+			FILE *sav = fopen(path, "wb");
+			for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
+				sc_mode(SC_RAM_RO);
+				for (int j = 0; j < sizeof filebuf; ++j)
+					filebuf[j] = GBA_SRAM[i + j];
+				sc_mode(SC_MEDIA);
+				fwrite(filebuf, sizeof filebuf, 1, sav);
+				iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", i);
+			}
+			fclose(sav);
+			remove("/scfw/lastsaved.txt");
+		}
 	}
 
 	for (;;) {
@@ -333,7 +385,6 @@ int main() {
 						VBlankIntrWait();
 					} while (!(pressed & KEY_A));
 				}
-
 			}
 			if (pressed & KEY_DOWN) {
 				++cursor.row;
