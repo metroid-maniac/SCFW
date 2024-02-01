@@ -7,6 +7,8 @@
 #include <limits.h>
 #include <dirent.h>
 
+char *stpcpy(char*, char*);
+
 void tryAgain() {
 	iprintf("Critical failure.\nPress A to restart.");
 	for (;;) {
@@ -30,7 +32,7 @@ union paging_index {
 	s32 abs;
 	struct {
 		u32 row : 4;
-		u32 page : 28;
+		s32 page : 28;
 	};
 };
 
@@ -295,7 +297,7 @@ int main() {
 				scanKeys();
 				pressed = keysDownRepeat();
 				VBlankIntrWait();
-			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN)));
+			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)));
 
 			seekdir(dir, diroffs[cursor.abs]);
 			struct dirent *dirent = readdir(dir);
@@ -334,14 +336,29 @@ int main() {
 
 			}
 			if (pressed & KEY_DOWN) {
-				++cursor.abs;
+				++cursor.row;
 				if (cursor.abs >= diroffs_len.abs)
-					cursor.abs -= diroffs_len.abs;
+					cursor.row = 0;
 			}
 			if (pressed & KEY_UP) {
-				--cursor.abs;
-				if (cursor.abs < 0)
-					cursor.abs += diroffs_len.abs;
+				--cursor.row;
+				if (cursor.abs >= diroffs_len.abs)
+					cursor.row = diroffs_len.row - 1;
+			}
+			if (pressed & KEY_LEFT) {
+				--cursor.page;
+				if (cursor.abs < 0) {
+					u32 row = cursor.row;
+					cursor.abs = diroffs_len.abs - 1;
+					if (row < cursor.row)
+						cursor.row = row;
+				}
+			}
+			if (pressed & KEY_RIGHT) {
+				++cursor.page;
+				if (cursor.abs >= diroffs_len.abs) {
+					cursor.page = 0;
+				} 
 			}
 		}
 		closedir(dir);
