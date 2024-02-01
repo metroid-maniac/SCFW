@@ -250,6 +250,7 @@ int main() {
 	for (;;) {
 		char cwd[PATH_MAX];
 		getcwd(cwd, PATH_MAX);
+		u32 cwdlen = strlen(cwd);
 		DIR *dir = opendir(".");
 		long diroffs[0x200];
 		u32 diroffs_len = 0;
@@ -272,7 +273,7 @@ int main() {
 			struct dirent *dirent = readdir(dir);
 
 			iprintf("\x1b[2J");
-			iprintf("%s\n", cwd);
+			iprintf("%s\n\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd);
 			iprintf("%ld: %s\n", i, dirent->d_name);
 
 			do {
