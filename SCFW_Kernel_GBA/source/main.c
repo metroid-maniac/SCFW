@@ -276,17 +276,20 @@ int main() {
 		}
 
 		for (union paging_index cursor = { .abs = 0 };;) {
-			seekdir(dir, diroffs[cursor.abs]);
-			struct dirent *dirent = readdir(dir);
-			u32 dirent_namelen = strlen(dirent->d_name);
-
 			iprintf("\x1b[2J");
-			iprintf("%s\n%d/%d\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd, 1 + cursor.page, 1 + diroffs_len.page);
-			if (dirent_namelen > 29)
-				iprintf("%.20s*%s\n", dirent->d_name, dirent->d_name + dirent_namelen - 8);
-			else
-				iprintf("%s\n", dirent->d_name);
+			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, 1 + diroffs_len.page);
 
+			for (union paging_index i = { .page = cursor.page }; i.abs < diroffs_len.abs && i.page == cursor.page; ++i.abs) {
+				seekdir(dir, diroffs[i.abs]);
+				struct dirent *dirent = readdir(dir);
+				u32 dirent_namelen = strlen(dirent->d_name);
+
+				char arrow = i.abs == cursor.abs ? '>' : ' ';
+				if (dirent_namelen > 28)
+					iprintf("%c%.20s*%s\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 7);
+				else
+					iprintf("%c%s\n", arrow, dirent->d_name);
+			}
 
 			do {
 				scanKeys();
@@ -294,6 +297,8 @@ int main() {
 				VBlankIntrWait();
 			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN)));
 
+			seekdir(dir, diroffs[cursor.abs]);
+			struct dirent *dirent = readdir(dir);
 			if (pressed & KEY_A) {
 				if (dirent->d_type == DT_DIR) {
 					chdir(dirent->d_name);
