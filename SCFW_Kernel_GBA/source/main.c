@@ -26,6 +26,14 @@ __attribute__((packed)) struct settings {
 struct settings settings;
 FILE *settings_file;
 
+union paging_index {
+	u32 abs;
+	struct {
+		u32 row : 4;
+		u32 page : 28;
+	};
+};
+
 #define GBA_ROM ((vu32*) 0x08000000)
 #define GBA_BUS ((vu16*) 0x08000000)
 
@@ -250,8 +258,9 @@ int main() {
 		getcwd(cwd, PATH_MAX);
 		u32 cwdlen = strlen(cwd);
 		DIR *dir = opendir(".");
-		long diroffs[0x200];
-		u32 diroffs_len = 0;
+		u32 diroffs[0x200];
+		union paging_index diroffs_len;
+		diroffs_len.abs = 0;
 		for (;;) {
 			long diroff = telldir(dir);
 			struct dirent *dirent = readdir(dir);
@@ -259,20 +268,25 @@ int main() {
 				break;
 			if (!strcmp(dirent->d_name, "."))
 				continue;
-			diroffs[diroffs_len++] = diroff;
+			diroffs[diroffs_len.abs++] = diroff;
 		}
-		if (!diroffs_len) {
+		if (!diroffs_len.abs) {
 			iprintf("No directory entries!\n");
 			tryAgain();
 		}
 
-		for (int i = 0;;) {
-			seekdir(dir, diroffs[i]);
+		for (union paging_index cursor = { .abs = 0 };;) {
+			seekdir(dir, diroffs[cursor.abs]);
 			struct dirent *dirent = readdir(dir);
+			u32 dirent_namelen = strlen(dirent->d_name);
 
 			iprintf("\x1b[2J");
-			iprintf("%s\n\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd);
-			iprintf("%ld: %s\n", i, dirent->d_name);
+			iprintf("%s\n%d\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd, cursor.abs);
+			if (dirent_namelen > 29)
+				iprintf("%.20s*%s\n", dirent->d_name, dirent->d_name + dirent_namelen - 8);
+			else
+				iprintf("%s\n", dirent->d_name);
+
 
 			do {
 				scanKeys();
@@ -315,14 +329,14 @@ int main() {
 
 			}
 			if (pressed & KEY_DOWN) {
-				++i;
-				if (i >= diroffs_len)
-					i -= diroffs_len;
+				++cursor.abs;
+				if (cursor.abs >= diroffs_len.abs)
+					cursor.abs -= diroffs_len.abs;
 			}
 			if (pressed & KEY_UP) {
-				--i;
-				if (i < 0)
-					i += diroffs_len;
+				--cursor.abs;
+				if (cursor.abs < 0)
+					cursor.abs += diroffs_len.abs;
 			}
 		}
 		closedir(dir);
