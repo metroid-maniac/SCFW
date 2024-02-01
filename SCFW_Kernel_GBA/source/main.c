@@ -63,10 +63,22 @@ EWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
 
-void selectFile(char *file) {
-	u32 namelen = strlen(file);
-	if (namelen > 4 && !strcmp(file + namelen - 4, ".gba")) {
-		FILE *rom = fopen(file, "rb");
+void setLastPlayed(char *path) {
+	FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "ab+");
+	char old_path[PATH_MAX];
+	fseek(lastPlayed, 0, SEEK_SET);
+	fread(old_path, PATH_MAX, 1, lastPlayed);
+	if (strcmp(path, old_path)) {
+		ftruncate(settings_file->_file, 0);
+		fwrite(path, strlen(path), 1, lastPlayed);
+	}
+	fclose(lastPlayed);
+}
+
+void selectFile(char *path) {
+	u32 pathlen = strlen(path);
+	if (pathlen > 4 && !strcmp(path + pathlen - 4, ".gba")) {
+		FILE *rom = fopen(path, "rb");
 		fseek(rom, 0, SEEK_END);
 		u32 romsize = ftell(rom);
 		fseek(rom, 0, SEEK_SET);
@@ -89,9 +101,12 @@ void selectFile(char *file) {
 			iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
 		} while (bytes);
 
+		iprintf("Let's go.\n");
+		setLastPlayed(path);
+
 		sc_mode(SC_RAM_RO);
 		SoftReset(ROM_RESTART);
-	} else if (namelen > 4 && !strcmp(file + namelen - 4, ".frm")) {
+	} else if (pathlen > 4 && !strcmp(path + pathlen - 4, ".frm")) {
 		u32 ime = REG_IME;
 		REG_IME = 0;
 
@@ -122,7 +137,7 @@ void selectFile(char *file) {
 		if (pressed & KEY_A) {
 			sc_mode(SC_MEDIA);
 			iprintf("Opening firmware\n");
-			FILE *fw = fopen(file, "rb");
+			FILE *fw = fopen(path, "rb");
 			fseek(fw, 0, SEEK_END);
 			u32 fwsize = ftell(fw);
 			fseek(fw, 0, SEEK_SET);
@@ -264,19 +279,41 @@ int main() {
 				scanKeys();
 				pressed = keysDownRepeat();
 				VBlankIntrWait();
-			} while (!(pressed & (KEY_A | KEY_B | KEY_UP | KEY_DOWN)));
+			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN)));
 
 			if (pressed & KEY_A) {
 				if (dirent->d_type == DT_DIR) {
 					chdir(dirent->d_name);
 					break;
 				} else {
-					selectFile(dirent->d_name);
+					// inefficient, idc
+					char path[PATH_MAX];
+					strncpy(path, cwd, PATH_MAX);
+					strncpy(path, "/", PATH_MAX);
+					strncpy(path, dirent->d_name, PATH_MAX);
+					selectFile(path);
 				}
 			}
 			if (pressed & KEY_B) {
 				chdir("..");
 				break;
+			}
+			if (pressed & KEY_START) {
+				FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "rb");
+				if (lastPlayed) {
+					char path[PATH_MAX];
+					fread(path, PATH_MAX, 1, lastPlayed);
+					fclose(lastPlayed);
+					selectFile(path);
+				} else {
+					iprintf("Could not open last played.\n");
+					do {
+						scanKeys();
+						pressed = keysDownRepeat();
+						VBlankIntrWait();
+					} while (!(pressed & KEY_A));
+				}
+
 			}
 			if (pressed & KEY_DOWN) {
 				++i;
