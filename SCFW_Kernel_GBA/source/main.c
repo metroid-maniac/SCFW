@@ -27,7 +27,7 @@ struct settings settings;
 FILE *settings_file;
 
 union paging_index {
-	u32 abs;
+	s32 abs;
 	struct {
 		u32 row : 4;
 		u32 page : 28;
@@ -281,7 +281,7 @@ int main() {
 			u32 dirent_namelen = strlen(dirent->d_name);
 
 			iprintf("\x1b[2J");
-			iprintf("%s\n%d\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd, cursor.abs);
+			iprintf("%s\n%d/%d\n", cwdlen > 29 ? cwd + cwdlen - 29 : cwd, 1 + cursor.page, 1 + diroffs_len.page);
 			if (dirent_namelen > 29)
 				iprintf("%.20s*%s\n", dirent->d_name, dirent->d_name + dirent_namelen - 8);
 			else
