@@ -339,10 +339,16 @@ int main() {
 				u32 dirent_namelen = strlen(dirent->d_name);
 
 				char arrow = i.abs == cursor.abs ? '>' : ' ';
-				if (dirent_namelen > 28)
-					iprintf("%c%.20s*%s\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 7);
+				if (dirent->d_type == DT_DIR)
+					if (dirent_namelen > 27)
+						iprintf("%c%.20s*%s/\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 6);
+					else
+						iprintf("%c%s/\n", arrow, dirent->d_name);
 				else
-					iprintf("%c%s\n", arrow, dirent->d_name);
+					if (dirent_namelen > 28)
+						iprintf("%c%.20s*%s\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 7);
+					else
+						iprintf("%c%s\n", arrow, dirent->d_name);
 			}
 
 			do {
