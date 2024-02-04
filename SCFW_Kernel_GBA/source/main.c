@@ -7,6 +7,9 @@
 #include <limits.h>
 #include <dirent.h>
 
+#include "Save.h"
+#include "WhiteScreenPatch.h"
+
 char *stpcpy(char*, char*);
 
 void tryAgain() {
@@ -76,6 +79,7 @@ void sc_mode(u32 mode)
 EWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
+bool savingAllowed;
 
 void setLastPlayed(char *path) {
 	/*
@@ -144,6 +148,22 @@ void selectFile(char *path) {
 			FILE *lastSaved = fopen("/scfw/lastsaved.txt", "wb");
 			fwrite(savname, pathlen, 1, lastSaved);
 			fclose(lastSaved);
+		}
+
+		iprintf("Applying patches...\n");
+		sc_mode(SC_RAM_RW);
+		patchGeneralWhiteScreen();
+		patchSpecificGame();
+		
+		printf("White Screen patch done!\nNow patching Save\n");
+		
+		const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
+		if (saveType != NULL && saveType->patchFunc != NULL){
+			bool done = saveType->patchFunc(saveType);
+			if(!done)
+			printf("Save Type Patch Error\n");
+		}else{
+			printf("No need to patch\n");
 		}
 
 		iprintf("Let's go.\n");
