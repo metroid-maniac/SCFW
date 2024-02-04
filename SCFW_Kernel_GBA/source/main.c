@@ -331,7 +331,7 @@ int main() {
 
 		for (union paging_index cursor = { .abs = 0 };;) {
 			iprintf("\x1b[2J");
-			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = diroffs_len.abs+1 }.page);
+			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + diroffs_len.abs }.page);
 
 			for (union paging_index i = { .page = cursor.page }; i.abs < diroffs_len.abs && i.page == cursor.page; ++i.abs) {
 				seekdir(dir, diroffs[i.abs]);
