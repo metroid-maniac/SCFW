@@ -79,7 +79,7 @@ void sc_mode(u32 mode)
 EWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
-bool savingAllowed;
+bool savingAllowed = true;
 
 void setLastPlayed(char *path) {
 	/*
@@ -103,6 +103,7 @@ void selectFile(char *path) {
 		FILE *rom = fopen(path, "rb");
 		fseek(rom, 0, SEEK_END);
 		u32 romsize = ftell(rom);
+		romSize = romsize;
 		fseek(rom, 0, SEEK_SET);
 
 		u32 total_bytes = 0;
@@ -155,17 +156,18 @@ void selectFile(char *path) {
 		patchGeneralWhiteScreen();
 		patchSpecificGame();
 		
-		printf("White Screen patch done!\nNow patching Save\n");
+		iprintf("White Screen patch done!\nNow patching Save\n");
 		
 		const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
 		if (saveType != NULL && saveType->patchFunc != NULL){
 			bool done = saveType->patchFunc(saveType);
 			if(!done)
-			printf("Save Type Patch Error\n");
-		}else{
+				printf("Save Type Patch Error\n");
+		} else {
 			printf("No need to patch\n");
 		}
-
+		
+		sc_mode(SC_MEDIA);
 		iprintf("Let's go.\n");
 		setLastPlayed(path);
 
