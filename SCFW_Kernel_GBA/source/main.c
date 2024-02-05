@@ -115,8 +115,7 @@ void selectFile(char *path) {
 			for (u32 i = 0; i < bytes; i += 4) {
 				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
 				if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-					iprintf("SDRAM write failed!\n");
-					tryAgain();
+					iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
 				}
 			}
 			sc_mode(SC_MEDIA);
