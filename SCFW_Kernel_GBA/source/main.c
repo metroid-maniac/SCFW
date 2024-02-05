@@ -137,8 +137,12 @@ void selectFile(char *path) {
 			do {
 				bytes = fread(filebuf, 1, sizeof filebuf, sav);
 				sc_mode(SC_RAM_RO);
-				for (int i = 0; i < bytes; ++i)
+				for (int i = 0; i < bytes; ++i) {
 					GBA_SRAM[total_bytes + i] = filebuf[i];
+					if (GBA_SRAM[total_bytes + i] != filebuf[i]) {
+						iprintf("\x1b[1A\x1b[KSRAM write failed at\n0x%x\n\n", i + total_bytes);
+					}
+				}
 				sc_mode(SC_MEDIA);
 				total_bytes += bytes;
 				iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", total_bytes);
