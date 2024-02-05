@@ -26,13 +26,40 @@ void tryAgain() {
 	}
 }
 
-__attribute__((packed)) struct settings { 
-	u8 autosave;
+enum
+{
+	FILTER_ALL,
+	FILTER_SELECTABLE,
+	FILTER_LEN
+};
+
+bool filter_all(struct dirent *dirent) {
+	if (!strcmp(dirent->d_name, "."))
+		return false;
+	return true;
+}
+bool filter_selectable(struct dirent *dirent) {
+	if (!strcmp(dirent->d_name, "."))
+		return false;
+	if (dirent->d_type == DT_DIR)
+		return true;
+	u32 namelen = strlen(dirent->d_name);
+	if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".gba"))
+		return true;
+	if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".frm"))
+		return true;
+	return false;
+}
+bool (*filters[FILTER_LEN])(struct dirent*) = { &filter_all, &filter_selectable };
+
+struct settings { 
+	int autosave;
+	int filter;
 };
 struct settings settings = {
-	.autosave = 1
+	.autosave = 1,
+	.filter = FILTER_ALL
 };
-FILE *settings_file;
 
 union paging_index {
 	s32 abs;
@@ -297,21 +324,6 @@ int main() {
 		tryAgain();
 	}
 
-	settings_file = fopen("/scfw/settings.bin", "rb");
-	if (settings_file) {
-		struct settings loaded_settings = settings;
-		fread(&loaded_settings, sizeof loaded_settings, 1, settings_file);
-		if (memcmp(&loaded_settings, &settings, sizeof settings)) {
-			settings = loaded_settings;
-			freopen("/scfw/settings.bin", "wb", settings_file);
-			fwrite(&settings, sizeof settings, 1, settings_file);
-		}
-	} else {
-		settings_file = fopen("/scfw/settings.bin", "wb");
-		fwrite(&settings, sizeof settings, 1, settings_file);
-	}
-	fclose(settings_file);
-
 	if (settings.autosave) {
 		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
 		if (lastSaved) {
@@ -345,9 +357,8 @@ int main() {
 			struct dirent *dirent = readdir(dir);
 			if (!dirent)
 				break;
-			if (!strcmp(dirent->d_name, "."))
-				continue;
-			diroffs[diroffs_len.abs++] = diroff;
+			if ((*filters[settings.filter])(dirent))
+				diroffs[diroffs_len.abs++] = diroff;
 		}
 		if (!diroffs_len.abs) {
 			iprintf("No directory entries!\n");
@@ -380,7 +391,7 @@ int main() {
 				scanKeys();
 				pressed = keysDownRepeat();
 				VBlankIntrWait();
-			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)));
+			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_R)));
 
 			seekdir(dir, diroffs[cursor.abs]);
 			struct dirent *dirent = readdir(dir);
@@ -441,6 +452,12 @@ int main() {
 				if (cursor.abs >= diroffs_len.abs) {
 					cursor.page = 0;
 				} 
+			}
+			if (pressed & KEY_R) {
+				++settings.filter;
+				if (settings.filter >= FILTER_LEN)
+					settings.filter -= FILTER_LEN;
+				break;
 			}
 		}
 		closedir(dir);
