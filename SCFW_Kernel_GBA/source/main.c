@@ -207,6 +207,7 @@ void selectFile(char *path) {
 		setLastPlayed(path);
 
 		sc_mode(SC_RAM_RO);
+		REG_IE = 0;
 		SoftReset(ROM_RESTART);
 	} else if (pathlen > 4 && !strcmp(path + pathlen - 4, ".frm")) {
 		u32 ime = REG_IME;
