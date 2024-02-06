@@ -54,21 +54,34 @@ bool (*filters[FILTER_LEN])(struct dirent*) = { &filter_all, &filter_selectable 
 
 struct dirent_brief {
     long off;
-    char nickname[32];
+    bool isdir;
+    char nickname[31];
 };
 
 enum
 {
 	SORT_NONE,
 	SORT_NICKNAME,
+	SORT_FOLDER_NICKNAME,
 	SORT_LEN
 };
 
 int sort_nickname(void const *l, void const *r) {
-	return strncmp(((struct dirent_brief*) l)->nickname, ((struct dirent_brief*) r)->nickname, 32);
+	return strncmp(((struct dirent_brief*) l)->nickname, ((struct dirent_brief*) r)->nickname, 31);
 }
 
-int (*sorts[SORT_LEN])(void const*, void const*) = { NULL, &sort_nickname };
+int sort_folder_nickname(void const *lv, void const *rv) {
+	struct dirent_brief *l = lv;
+	struct dirent_brief *r = rv;
+	if (l->isdir && !r->isdir)
+		return -1;
+	else if (!l->isdir && r->isdir)
+		return 1;
+	else
+		return sort_nickname(l, r);
+}
+
+int (*sorts[SORT_LEN])(void const*, void const*) = { NULL, &sort_nickname, &sort_folder_nickname };
 
 struct settings { 
 	int autosave;
@@ -385,6 +398,7 @@ int main() {
 			}
 			if ((*filters[settings.filter])(dirent)) {
 				dirents[dirents_len.abs].off = off;
+				dirents[dirents_len.abs].isdir = dirent->d_type == DT_DIR;
  				u32 namelen = strlen(dirent->d_name);
 				if (dirent->d_type == DT_DIR)
 					if (namelen > 27)
