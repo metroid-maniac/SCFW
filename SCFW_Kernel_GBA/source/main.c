@@ -402,14 +402,14 @@ int main() {
  				u32 namelen = strlen(dirent->d_name);
 				if (dirent->d_type == DT_DIR)
 					if (namelen > 27)
-						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s/\n", dirent->d_name, dirent->d_name + namelen - 6);
+						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s/", dirent->d_name, dirent->d_name + namelen - 6);
 					else
-						sprintf(dirents[dirents_len.abs].nickname, "%s/\n", dirent->d_name);
+						sprintf(dirents[dirents_len.abs].nickname, "%s/", dirent->d_name);
 				else
 					if (namelen > 28)
-						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s\n", dirent->d_name, dirent->d_name + namelen - 7);
+						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s", dirent->d_name, dirent->d_name + namelen - 7);
 					else
-						sprintf(dirents[dirents_len.abs].nickname, "%s\n", dirent->d_name);
+						sprintf(dirents[dirents_len.abs].nickname, "%s", dirent->d_name);
 				++dirents_len.abs;
 			}
 		}
@@ -425,7 +425,7 @@ int main() {
 			iprintf("%s\n%d/%d%s\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + dirents_len.abs }.page, dirents_overflow ? "!" : "");
 
 			for (union paging_index i = { .page = cursor.page }; i.abs < dirents_len.abs && i.page == cursor.page; ++i.abs)
-				iprintf("%c%s", i.abs == cursor.abs ? '>' : ' ', dirents[i.abs].nickname);
+				iprintf("%c%s\n", i.abs == cursor.abs ? '>' : ' ', dirents[i.abs].nickname);
 
 			do {
 				scanKeys();
