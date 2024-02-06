@@ -442,7 +442,7 @@ int main() {
 				FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "rb");
 				if (lastPlayed) {
 					char path[PATH_MAX];
-					fread(path, PATH_MAX, 1, lastPlayed);
+					path[fread(path, 1, PATH_MAX, lastPlayed)] = '\0';
 					fclose(lastPlayed);
 					selectFile(path);
 				} else {
