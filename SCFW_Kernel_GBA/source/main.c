@@ -349,7 +349,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.3.2 GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.3.3 GBA-mode\n\n");
 
 	if (fatInitDefault()) {
 		iprintf("FAT system initialised\n");
