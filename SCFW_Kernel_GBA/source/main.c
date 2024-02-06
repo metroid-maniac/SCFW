@@ -372,12 +372,17 @@ int main() {
 		DIR *dir = opendir(".");
 		EWRAM_DATA static struct dirent_brief dirents[0x200];
 		union paging_index dirents_len;
+		bool dirents_overflow = false;
 		dirents_len.abs = 0;
 		for (;;) {
 			u32 off = telldir(dir);
 			struct dirent *dirent = readdir(dir);
 			if (!dirent)
 				break;
+			if (dirents_len.abs >= 0x200) {
+				dirents_overflow = true;
+				break;
+			}
 			if ((*filters[settings.filter])(dirent)) {
 				dirents[dirents_len.abs].off = off;
  				u32 namelen = strlen(dirent->d_name);
@@ -403,7 +408,7 @@ int main() {
 
 		for (union paging_index cursor = { .abs = 0 };;) {
 			iprintf("\x1b[2J");
-			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + dirents_len.abs }.page);
+			iprintf("%s\n%d/%d%s\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + dirents_len.abs }.page, dirents_overflow ? "!" : "");
 
 			for (union paging_index i = { .page = cursor.page }; i.abs < dirents_len.abs && i.page == cursor.page; ++i.abs)
 				iprintf("%c%s", i.abs == cursor.abs ? '>' : ' ', dirents[i.abs].nickname);
