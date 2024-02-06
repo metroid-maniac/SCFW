@@ -52,13 +52,33 @@ bool filter_selectable(struct dirent *dirent) {
 }
 bool (*filters[FILTER_LEN])(struct dirent*) = { &filter_all, &filter_selectable };
 
+struct dirent_brief {
+    long off;
+    char nickname[32];
+};
+
+enum
+{
+	SORT_NONE,
+	SORT_NICKNAME,
+	SORT_LEN
+};
+
+int sort_nickname(void const *l, void const *r) {
+	return strncmp(((struct dirent_brief*) l)->nickname, ((struct dirent_brief*) r)->nickname, 32);
+}
+
+int (*sorts[SORT_LEN])(void const*, void const*) = { NULL, &sort_nickname };
+
 struct settings { 
 	int autosave;
 	int filter;
+	int sort;
 };
 struct settings settings = {
 	.autosave = 1,
-	.filter = FILTER_ALL
+	.filter = FILTER_ALL,
+	.sort = SORT_NONE
 };
 
 union paging_index {
@@ -102,11 +122,6 @@ void sc_mode(u32 mode)
     *(vu16*)0x9FFFFFE = mode;
     REG_IME = ime;
 }
-
-struct dirent_brief {
-    long off;
-    char nickname[32];
-};
 
 EWRAM_DATA u8 filebuf[0x4000];
 
@@ -383,6 +398,8 @@ int main() {
 			iprintf("No directory entries!\n");
 			tryAgain();
 		}
+		if (sorts[settings.sort])
+			qsort(dirents, dirents_len.abs, sizeof *dirents, sorts[settings.sort]);
 
 		for (union paging_index cursor = { .abs = 0 };;) {
 			iprintf("\x1b[2J");
@@ -395,7 +412,7 @@ int main() {
 				scanKeys();
 				pressed = keysDownRepeat();
 				VBlankIntrWait();
-			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_R)));
+			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)));
 
 			if (pressed & KEY_A) {
 				seekdir(dir, dirents[cursor.abs].off);
@@ -456,6 +473,12 @@ int main() {
 				if (cursor.abs >= dirents_len.abs) {
 					cursor.page = 0;
 				} 
+			}
+			if (pressed & KEY_L) {
+				++settings.sort;
+				if (settings.sort >= SORT_LEN)
+					settings.sort -= SORT_LEN;
+				break;
 			}
 			if (pressed & KEY_R) {
 				++settings.filter;
