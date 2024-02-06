@@ -362,7 +362,7 @@ int main() {
 		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
 		if (lastSaved) {
 			char path[PATH_MAX];
-			fread(path, PATH_MAX, 1, lastSaved);
+			path[fread(path, 1, PATH_MAX, lastSaved)] = '\0';
 			iprintf("Saving SRAM to %s\n\n", path);
 			FILE *sav = fopen(path, "wb");
 			for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
