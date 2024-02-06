@@ -103,6 +103,11 @@ void sc_mode(u32 mode)
     REG_IME = ime;
 }
 
+struct dirent_brief {
+    long off;
+    char nickname[32];
+};
+
 EWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
@@ -349,43 +354,41 @@ int main() {
 		getcwd(cwd, PATH_MAX);
 		u32 cwdlen = strlen(cwd);
 		DIR *dir = opendir(".");
-		u32 diroffs[0x200];
-		union paging_index diroffs_len;
-		diroffs_len.abs = 0;
+		EWRAM_DATA static struct dirent_brief dirents[0x200];
+		union paging_index dirents_len;
+		dirents_len.abs = 0;
 		for (;;) {
-			long diroff = telldir(dir);
+			u32 off = telldir(dir);
 			struct dirent *dirent = readdir(dir);
 			if (!dirent)
 				break;
-			if ((*filters[settings.filter])(dirent))
-				diroffs[diroffs_len.abs++] = diroff;
+			if ((*filters[settings.filter])(dirent)) {
+				dirents[dirents_len.abs].off = off;
+ 				u32 namelen = strlen(dirent->d_name);
+				if (dirent->d_type == DT_DIR)
+					if (namelen > 27)
+						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s/\n", dirent->d_name, dirent->d_name + namelen - 6);
+					else
+						sprintf(dirents[dirents_len.abs].nickname, "%s/\n", dirent->d_name);
+				else
+					if (namelen > 28)
+						sprintf(dirents[dirents_len.abs].nickname, "%.20s*%s\n", dirent->d_name, dirent->d_name + namelen - 7);
+					else
+						sprintf(dirents[dirents_len.abs].nickname, "%s\n", dirent->d_name);
+				++dirents_len.abs;
+			}
 		}
-		if (!diroffs_len.abs) {
+		if (!dirents_len.abs) {
 			iprintf("No directory entries!\n");
 			tryAgain();
 		}
 
 		for (union paging_index cursor = { .abs = 0 };;) {
 			iprintf("\x1b[2J");
-			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + diroffs_len.abs }.page);
+			iprintf("%s\n%d/%d\n", cwdlen > 28 ? cwd + cwdlen - 28 : cwd, 1 + cursor.page, (union paging_index){ .abs = 15 + dirents_len.abs }.page);
 
-			for (union paging_index i = { .page = cursor.page }; i.abs < diroffs_len.abs && i.page == cursor.page; ++i.abs) {
-				seekdir(dir, diroffs[i.abs]);
-				struct dirent *dirent = readdir(dir);
-				u32 dirent_namelen = strlen(dirent->d_name);
-
-				char arrow = i.abs == cursor.abs ? '>' : ' ';
-				if (dirent->d_type == DT_DIR)
-					if (dirent_namelen > 27)
-						iprintf("%c%.20s*%s/\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 6);
-					else
-						iprintf("%c%s/\n", arrow, dirent->d_name);
-				else
-					if (dirent_namelen > 28)
-						iprintf("%c%.20s*%s\n", arrow, dirent->d_name, dirent->d_name + dirent_namelen - 7);
-					else
-						iprintf("%c%s\n", arrow, dirent->d_name);
-			}
+			for (union paging_index i = { .page = cursor.page }; i.abs < dirents_len.abs && i.page == cursor.page; ++i.abs)
+				iprintf("%c%s", i.abs == cursor.abs ? '>' : ' ', dirents[i.abs].nickname);
 
 			do {
 				scanKeys();
@@ -393,9 +396,9 @@ int main() {
 				VBlankIntrWait();
 			} while (!(pressed & (KEY_A | KEY_B | KEY_START | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_R)));
 
-			seekdir(dir, diroffs[cursor.abs]);
-			struct dirent *dirent = readdir(dir);
 			if (pressed & KEY_A) {
+				seekdir(dir, dirents[cursor.abs].off);
+				struct dirent *dirent = readdir(dir);
 				if (dirent->d_type == DT_DIR) {
 					chdir(dirent->d_name);
 					break;
@@ -430,26 +433,26 @@ int main() {
 			}
 			if (pressed & KEY_DOWN) {
 				++cursor.row;
-				if (cursor.abs >= diroffs_len.abs)
+				if (cursor.abs >= dirents_len.abs)
 					cursor.row = 0;
 			}
 			if (pressed & KEY_UP) {
 				--cursor.row;
-				if (cursor.abs >= diroffs_len.abs)
-					cursor.row = diroffs_len.row - 1;
+				if (cursor.abs >= dirents_len.abs)
+					cursor.row = dirents_len.row - 1;
 			}
 			if (pressed & KEY_LEFT) {
 				--cursor.page;
 				if (cursor.abs < 0) {
 					u32 row = cursor.row;
-					cursor.abs = diroffs_len.abs - 1;
+					cursor.abs = dirents_len.abs - 1;
 					if (row < cursor.row)
 						cursor.row = row;
 				}
 			}
 			if (pressed & KEY_RIGHT) {
 				++cursor.page;
-				if (cursor.abs >= diroffs_len.abs) {
+				if (cursor.abs >= dirents_len.abs) {
 					cursor.page = 0;
 				} 
 			}
