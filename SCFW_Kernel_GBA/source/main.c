@@ -44,9 +44,9 @@ bool filter_selectable(struct dirent *dirent) {
 	if (dirent->d_type == DT_DIR)
 		return true;
 	u32 namelen = strlen(dirent->d_name);
-	if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".gba"))
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
 		return true;
-	if (namelen > 4 && !strcmp(dirent->d_name + namelen - 4, ".frm"))
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".frm"))
 		return true;
 	return false;
 }
@@ -67,7 +67,7 @@ enum
 };
 
 int sort_nickname(void const *l, void const *r) {
-	return strncmp(((struct dirent_brief*) l)->nickname, ((struct dirent_brief*) r)->nickname, 31);
+	return strncasecmp(((struct dirent_brief*) l)->nickname, ((struct dirent_brief*) r)->nickname, 31);
 }
 
 int sort_folder_nickname(void const *lv, void const *rv) {
@@ -159,7 +159,7 @@ void setLastPlayed(char *path) {
 
 void selectFile(char *path) {
 	u32 pathlen = strlen(path);
-	if (pathlen > 4 && !strcmp(path + pathlen - 4, ".gba")) {
+	if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gba")) {
 		FILE *rom = fopen(path, "rb");
 		fseek(rom, 0, SEEK_END);
 		u32 romsize = ftell(rom);
@@ -237,7 +237,7 @@ void selectFile(char *path) {
 		sc_mode(SC_RAM_RO);
 		REG_IE = 0;
 		SoftReset(ROM_RESTART);
-	} else if (pathlen > 4 && !strcmp(path + pathlen - 4, ".frm")) {
+	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".frm")) {
 		u32 ime = REG_IME;
 		REG_IME = 0;
 
