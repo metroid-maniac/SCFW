@@ -489,8 +489,10 @@ int main() {
 			}
 			if (pressed & KEY_RIGHT) {
 				++cursor.page;
-				if (cursor.abs >= dirents_len.abs) {
+				if (cursor.page >= (union paging_index){ .abs = dirents_len.abs+15 }.page)
 					cursor.page = 0;
+				else if (cursor.abs >= dirents_len.abs) {
+					cursor.row = dirents_len.row - 1;
 				} 
 			}
 			if (pressed & KEY_L) {
