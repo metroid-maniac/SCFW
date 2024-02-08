@@ -369,7 +369,7 @@ bool _SCSD_writeSectors_my (u32 sector, u32 numSectors, const void* buffer) {
 
         _SCSD_sendClocks(64);
 
-        offset += BYTES_PER_READ;
+        offset += isSDHC ? 1 : BYTES_PER_READ;
         data += BYTES_PER_READ;
 
         i = WRITE_TIMEOUT;
