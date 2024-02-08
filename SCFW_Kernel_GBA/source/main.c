@@ -83,7 +83,7 @@ int sort_folder_nickname(void const *lv, void const *rv) {
 
 int (*sorts[SORT_LEN])(void const*, void const*) = { NULL, &sort_nickname, &sort_folder_nickname };
 
-struct settings { 
+struct settings {
 	int autosave;
 	int filter;
 	int sort;
@@ -218,9 +218,9 @@ void selectFile(char *path) {
 		sc_mode(SC_RAM_RW);
 		patchGeneralWhiteScreen();
 		patchSpecificGame();
-		
+
 		iprintf("White Screen patch done!\nNow patching Save\n");
-		
+
 		const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
 		if (saveType != NULL && saveType->patchFunc != NULL){
 			bool done = saveType->patchFunc(saveType);
@@ -229,7 +229,7 @@ void selectFile(char *path) {
 		} else {
 			printf("No need to patch\n");
 		}
-		
+
 		sc_mode(SC_MEDIA);
 		iprintf("Let's go.\n");
 		setLastPlayed(path);
@@ -357,6 +357,26 @@ int main() {
 		iprintf("FAT initialisation failed!\n");
 		tryAgain();
 	}
+
+	iprintf("Loading settings...\n");
+	FILE *settings_file = fopen("/scfw/settings.bin", "rb+");
+	if (settings_file) {
+		iprintf("Reading settings\n");
+		if (fread(&settings, 1, sizeof settings, settings_file) != sizeof settings) {
+				iprintf("Appending new defaults\n");
+				freopen("", "wb", settings_file);
+				fwrite(&settings, 1, sizeof settings, settings_file);
+		}
+		fclose(settings_file);
+	} else {
+		iprintf("Creating settings file\n");
+		settings_file = fopen("/scfw/settings.bin", "wb");
+		if (settings_file) {
+			fwrite(&settings, 1, sizeof settings, settings_file);
+			fclose(settings_file);
+		}
+	}
+	iprintf("Settings loaded!\n");
 
 	if (settings.autosave) {
 		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
@@ -493,18 +513,32 @@ int main() {
 					cursor.page = 0;
 				else if (cursor.abs >= dirents_len.abs) {
 					cursor.row = dirents_len.row - 1;
-				} 
+				}
 			}
 			if (pressed & KEY_L) {
 				++settings.sort;
 				if (settings.sort >= SORT_LEN)
 					settings.sort -= SORT_LEN;
+
+				settings_file = fopen("/scfw/settings.bin", "wb");
+				if (settings_file) {
+					fwrite(&settings, 1, sizeof settings, settings_file);
+					fclose(settings_file);
+				}
+
 				break;
 			}
 			if (pressed & KEY_R) {
 				++settings.filter;
 				if (settings.filter >= FILTER_LEN)
 					settings.filter -= FILTER_LEN;
+
+				settings_file = fopen("/scfw/settings.bin", "wb");
+				if (settings_file) {
+					fwrite(&settings, 1, sizeof settings, settings_file);
+					fclose(settings_file);
+				}
+
 				break;
 			}
 		}
