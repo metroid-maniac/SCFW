@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.H>
 
+#include "my_io_scsd.h"
+
 #define GBA_ROM ((vu32*) 0x08000000)
 
 enum
@@ -41,14 +43,15 @@ int main() {
 
 	iprintf("SCFW v0.3.3 GBA-mode\n\n");
 
-	if (fatInitDefault()) {
+	_my_io_scsd.startup();
+	if (fatMountSimple("fat", &_my_io_scsd)) {
 		iprintf("FAT system initialised\n");
 	} else {
 		iprintf("FAT initialisation failed!\n");
 		waitForever();
 	}
 	
-	FILE *kernel = fopen("scfw/kernel.gba","rb");
+	FILE *kernel = fopen("fat:/scfw/kernel.gba","rb");
 	if (kernel) {
 		iprintf("Kernel file opened successfully\n");
 	} else {
