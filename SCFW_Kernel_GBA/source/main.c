@@ -411,7 +411,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.3.3 GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.4 GBA-mode\n\n");
 
 	_my_io_scsd.startup();
 	if (fatMountSimple("fat", &_my_io_scsd)) {
