@@ -85,11 +85,15 @@ int (*sorts[SORT_LEN])(void const*, void const*) = { NULL, &sort_nickname, &sort
 
 struct settings {
 	int autosave;
+	int sram_patch;
+	int waitstate_patch;
 	int filter;
 	int sort;
 };
 struct settings settings = {
 	.autosave = 1,
+	.sram_patch = 1,
+	.waitstate_patch = 1,
 	.filter = FILTER_ALL,
 	.sort = SORT_NONE
 };
@@ -214,20 +218,25 @@ void selectFile(char *path) {
 			fclose(lastSaved);
 		}
 
-		iprintf("Applying patches...\n");
-		sc_mode(SC_RAM_RW);
-		patchGeneralWhiteScreen();
-		patchSpecificGame();
+		if (settings.waitstate_patch) {
+			iprintf("Applying waitstate patches...\n");
+			sc_mode(SC_RAM_RW);
+			patchGeneralWhiteScreen();
+			patchSpecificGame();
+			iprintf("Waitstate patch done!\n");
+		}
 
-		iprintf("White Screen patch done!\nNow patching Save\n");
-
-		const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
-		if (saveType != NULL && saveType->patchFunc != NULL){
-			bool done = saveType->patchFunc(saveType);
-			if(!done)
-				printf("Save Type Patch Error\n");
-		} else {
-			printf("No need to patch\n");
+		if (settings.sram_patch) {
+			iprintf("Applying SRAM patch...\n");
+			sc_mode(SC_RAM_RW);
+			const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
+			if (saveType != NULL && saveType->patchFunc != NULL){
+				bool done = saveType->patchFunc(saveType);
+				if(!done)
+					printf("Save Type Patch Error\n");
+			} else {
+				printf("No need to patch\n");
+			}
 		}
 
 		sc_mode(SC_MEDIA);
@@ -340,6 +349,57 @@ void selectFile(char *path) {
 	}
 }
 
+void change_settings(char *path) {
+	for (int cursor = 0;;) {
+		iprintf("\x1b[2J"
+		        "SCFW Kernel v0.3.3 GBA-mode\n\n");
+		
+		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
+		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
+		iprintf("%cWaitstate Patch: %i\n", cursor == 2 ? '>' : ' ', settings.waitstate_patch);
+		
+		do {
+			scanKeys();
+			pressed = keysDownRepeat();
+			VBlankIntrWait();
+		} while (!(pressed & (KEY_A | KEY_B | KEY_UP | KEY_DOWN)));
+		
+		if (pressed & KEY_A) {
+			switch (cursor) {
+			case 0:
+				settings.autosave = !settings.autosave;
+				break;
+			case 1: 
+				settings.sram_patch = !settings.sram_patch;
+				break;
+			case 2:
+				settings.waitstate_patch = !settings.waitstate_patch;
+				break;
+			}
+		}
+		if (pressed & KEY_B) {
+			break;
+		}
+		if (pressed & KEY_UP) {
+			--cursor;
+			if (cursor < 0)
+				cursor += 3;
+		}
+		if (pressed & KEY_DOWN) {
+			++cursor;
+			if (cursor >= 3)
+				cursor -= 3;
+		}
+	}
+	
+	iprintf("Saving settings...\n");
+	FILE *settings_file = fopen("/scfw/settings.bin", "wb");
+	if (settings_file) {
+		fwrite(&settings, 1, sizeof settings, settings_file);
+		fclose(settings_file);
+	}
+}
+
 int main() {
 	irqInit();
 	irqEnable(IRQ_VBLANK);
@@ -358,25 +418,27 @@ int main() {
 		tryAgain();
 	}
 
-	iprintf("Loading settings...\n");
-	FILE *settings_file = fopen("/scfw/settings.bin", "rb+");
-	if (settings_file) {
-		iprintf("Reading settings\n");
-		if (fread(&settings, 1, sizeof settings, settings_file) != sizeof settings) {
-				iprintf("Appending new defaults\n");
-				freopen("", "wb", settings_file);
-				fwrite(&settings, 1, sizeof settings, settings_file);
-		}
-		fclose(settings_file);
-	} else {
-		iprintf("Creating settings file\n");
-		settings_file = fopen("/scfw/settings.bin", "wb");
+	{
+		iprintf("Loading settings...\n");
+		FILE *settings_file = fopen("/scfw/settings.bin", "rb+");
 		if (settings_file) {
-			fwrite(&settings, 1, sizeof settings, settings_file);
+			iprintf("Reading settings\n");
+			if (fread(&settings, 1, sizeof settings, settings_file) != sizeof settings) {
+					iprintf("Appending new defaults\n");
+					freopen("", "wb", settings_file);
+					fwrite(&settings, 1, sizeof settings, settings_file);
+			}
 			fclose(settings_file);
+		} else {
+			iprintf("Creating settings file\n");
+			settings_file = fopen("/scfw/settings.bin", "wb");
+			if (settings_file) {
+				fwrite(&settings, 1, sizeof settings, settings_file);
+				fclose(settings_file);
+			}
 		}
+		iprintf("Settings loaded!\n");
 	}
-	iprintf("Settings loaded!\n");
 
 	if (settings.autosave) {
 		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
@@ -469,7 +531,8 @@ int main() {
 				}
 			}
 			if (pressed & KEY_B) {
-				chdir("..");
+				if (chdir(".."))
+					change_settings(NULL);
 				break;
 			}
 			if (pressed & KEY_START) {
@@ -520,24 +583,12 @@ int main() {
 				if (settings.sort >= SORT_LEN)
 					settings.sort -= SORT_LEN;
 
-				settings_file = fopen("/scfw/settings.bin", "wb");
-				if (settings_file) {
-					fwrite(&settings, 1, sizeof settings, settings_file);
-					fclose(settings_file);
-				}
-
 				break;
 			}
 			if (pressed & KEY_R) {
 				++settings.filter;
 				if (settings.filter >= FILTER_LEN)
 					settings.filter -= FILTER_LEN;
-
-				settings_file = fopen("/scfw/settings.bin", "wb");
-				if (settings_file) {
-					fwrite(&settings, 1, sizeof settings, settings_file);
-					fclose(settings_file);
-				}
 
 				break;
 			}
