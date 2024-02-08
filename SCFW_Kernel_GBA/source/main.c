@@ -10,6 +10,8 @@
 #include "Save.h"
 #include "WhiteScreenPatch.h"
 
+#include "my_io_scsd.h"
+
 char *stpcpy(char*, char*);
 
 void tryAgain() {
@@ -411,7 +413,8 @@ int main() {
 
 	iprintf("SCFW Kernel v0.3.3 GBA-mode\n\n");
 
-	if (fatInitDefault()) {
+	_my_io_scsd.startup();
+	if (fatMountSimple("fat", &_my_io_scsd)) {
 		iprintf("FAT system initialised\n");
 	} else {
 		iprintf("FAT initialisation failed!\n");
