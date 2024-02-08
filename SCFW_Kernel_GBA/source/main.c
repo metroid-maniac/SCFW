@@ -420,6 +420,7 @@ int main() {
 		iprintf("FAT initialisation failed!\n");
 		tryAgain();
 	}
+	chdir("fat:/");
 
 	{
 		iprintf("Loading settings...\n");
