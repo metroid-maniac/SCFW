@@ -13,6 +13,7 @@
 #include "my_io_scsd.h"
 
 char *stpcpy(char*, char*);
+int strcasecmp(char*, char*);
 
 void tryAgain() {
 	iprintf("Critical failure.\nPress A to restart.");
@@ -32,27 +33,15 @@ enum
 {
 	FILTER_ALL,
 	FILTER_SELECTABLE,
+	FILTER_GAME,
 	FILTER_LEN
 };
 
-bool filter_all(struct dirent *dirent) {
-	if (!strcmp(dirent->d_name, "."))
-		return false;
-	return true;
-}
-bool filter_selectable(struct dirent *dirent) {
-	if (!strcmp(dirent->d_name, "."))
-		return false;
-	if (dirent->d_type == DT_DIR)
-		return true;
-	u32 namelen = strlen(dirent->d_name);
-	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
-		return true;
-	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".frm"))
-		return true;
-	return false;
-}
-bool (*filters[FILTER_LEN])(struct dirent*) = { &filter_all, &filter_selectable };
+bool filter_all(struct dirent *dirent);
+bool filter_game(struct dirent *dirent);
+bool filter_selectable(struct dirent *dirent);
+
+bool (*filters[FILTER_LEN])(struct dirent*) = { &filter_all, &filter_selectable, &filter_game };
 
 struct dirent_brief {
     long off;
@@ -107,6 +96,36 @@ union paging_index {
 		s32 page : 28;
 	};
 };
+
+bool filter_all(struct dirent *dirent) {
+	if (!strcmp(dirent->d_name, "."))
+		return false;
+	return true;
+}
+bool filter_game(struct dirent *dirent) {
+	if (!strcmp(dirent->d_name, "."))
+		return false;
+	if (dirent->d_type == DT_DIR)
+		return true;
+	u32 namelen = strlen(dirent->d_name);
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
+		return true;
+	return false;
+}
+bool filter_selectable(struct dirent *dirent) {
+	if (!strcmp(dirent->d_name, "."))
+		return false;
+	if (dirent->d_type == DT_DIR)
+		return true;
+	u32 namelen = strlen(dirent->d_name);
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
+		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".frm"))
+		return true;
+	if (!settings.autosave && namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".sav"))
+		return true;
+	return false;
+}
 
 #define GBA_ROM ((vu32*) 0x08000000)
 #define GBA_BUS ((vu16*) 0x08000000)
@@ -163,6 +182,47 @@ void setLastPlayed(char *path) {
 	fclose(lastPlayed);
 }
 
+void loadSram(char *path) {
+	sc_mode(SC_MEDIA);
+	FILE *sav = fopen(path, "rb");
+	if (sav) {
+		iprintf("Loading SRAM:\n\n");
+		u32 total_bytes = 0;
+		u32 bytes = 0;
+		do {
+			bytes = fread(filebuf, 1, sizeof filebuf, sav);
+			sc_mode(SC_RAM_RO);
+			for (int i = 0; i < bytes; ++i) {
+				GBA_SRAM[total_bytes + i] = filebuf[i];
+				if (GBA_SRAM[total_bytes + i] != filebuf[i]) {
+					iprintf("\x1b[1A\x1b[KSRAM write failed at\n0x%x\n\n", i + total_bytes);
+				}
+			}
+			sc_mode(SC_MEDIA);
+			total_bytes += bytes;
+			iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", total_bytes);
+		} while (bytes);
+	fclose(sav);
+	} else {
+		iprintf("Save file does not exist.\n");
+	}
+}
+
+void saveSram(char *path) {
+	sc_mode(SC_MEDIA);
+	iprintf("Saving SRAM to %s\n\n", path);
+	FILE *sav = fopen(path, "wb");
+	for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
+		sc_mode(SC_RAM_RO);
+		for (int j = 0; j < sizeof filebuf; ++j)
+			filebuf[j] = GBA_SRAM[i + j];
+		sc_mode(SC_MEDIA);
+		fwrite(filebuf, sizeof filebuf, 1, sav);
+		iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", i);
+		fclose(sav);
+	}
+}
+
 void selectFile(char *path) {
 	u32 pathlen = strlen(path);
 	if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gba")) {
@@ -194,26 +254,7 @@ void selectFile(char *path) {
 			char savname[PATH_MAX];
 			strcpy(savname, path);
 			strcpy(savname + pathlen - 4, ".sav");
-
-			FILE *sav = fopen(savname, "ab");
-			freopen(savname, "rb", sav);
-			iprintf("Loading SRAM:\n\n");
-			total_bytes = 0;
-			bytes = 0;
-			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, sav);
-				sc_mode(SC_RAM_RO);
-				for (int i = 0; i < bytes; ++i) {
-					GBA_SRAM[total_bytes + i] = filebuf[i];
-					if (GBA_SRAM[total_bytes + i] != filebuf[i]) {
-						iprintf("\x1b[1A\x1b[KSRAM write failed at\n0x%x\n\n", i + total_bytes);
-					}
-				}
-				sc_mode(SC_MEDIA);
-				total_bytes += bytes;
-				iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", total_bytes);
-			} while (bytes);
-			fclose(sav);
+			loadSram(savname);
 
 			FILE *lastSaved = fopen("/scfw/lastsaved.txt", "wb");
 			fwrite(savname, pathlen, 1, lastSaved);
@@ -341,6 +382,30 @@ void selectFile(char *path) {
 			pressed = keysDownRepeat();
 			VBlankIntrWait();
 		} while (!(pressed & KEY_A));
+	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".sav")) {
+		if (settings.autosave) {
+			iprintf("Disable autosave to manage\nSRAM manually.\n");
+			do {
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!pressed);
+		} else {
+			iprintf("Push L to load file to SRAM\n"
+			        "Push R to save SRAM to file.\n"
+					"Push B to cancel.\n");
+			do {
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!(pressed & (KEY_L | KEY_R | KEY_B)));
+			if (pressed & KEY_L) {
+				loadSram(path);
+			}
+			else if (pressed & KEY_R) {
+				saveSram(path);
+			}
+		}
 	} else {
 		iprintf("Unrecognised file extension!\n");
 		do {
@@ -449,17 +514,7 @@ int main() {
 		if (lastSaved) {
 			char path[PATH_MAX];
 			path[fread(path, 1, PATH_MAX, lastSaved)] = '\0';
-			iprintf("Saving SRAM to %s\n\n", path);
-			FILE *sav = fopen(path, "wb");
-			for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
-				sc_mode(SC_RAM_RO);
-				for (int j = 0; j < sizeof filebuf; ++j)
-					filebuf[j] = GBA_SRAM[i + j];
-				sc_mode(SC_MEDIA);
-				fwrite(filebuf, sizeof filebuf, 1, sav);
-				iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", i);
-			}
-			fclose(sav);
+			saveSram(path);
 			remove("/scfw/lastsaved.txt");
 		}
 	}
@@ -534,12 +589,12 @@ int main() {
 					selectFile(path);
 				}
 			}
-			if (pressed & KEY_B) {
+			else if (pressed & KEY_B) {
 				if (chdir(".."))
 					change_settings(NULL);
 				break;
 			}
-			if (pressed & KEY_START) {
+			else if (pressed & KEY_START) {
 				FILE *lastPlayed = fopen("/scfw/lastplayed.txt", "rb");
 				if (lastPlayed) {
 					char path[PATH_MAX];
@@ -555,17 +610,17 @@ int main() {
 					} while (!(pressed & KEY_A));
 				}
 			}
-			if (pressed & KEY_DOWN) {
+			else if (pressed & KEY_DOWN) {
 				++cursor.row;
 				if (cursor.abs >= dirents_len.abs)
 					cursor.row = 0;
 			}
-			if (pressed & KEY_UP) {
+			else if (pressed & KEY_UP) {
 				--cursor.row;
 				if (cursor.abs >= dirents_len.abs)
 					cursor.row = dirents_len.row - 1;
 			}
-			if (pressed & KEY_LEFT) {
+			else if (pressed & KEY_LEFT) {
 				--cursor.page;
 				if (cursor.abs < 0) {
 					u32 row = cursor.row;
@@ -574,7 +629,7 @@ int main() {
 						cursor.row = row;
 				}
 			}
-			if (pressed & KEY_RIGHT) {
+			else if (pressed & KEY_RIGHT) {
 				++cursor.page;
 				if (cursor.page >= (union paging_index){ .abs = dirents_len.abs+15 }.page)
 					cursor.page = 0;
@@ -582,14 +637,14 @@ int main() {
 					cursor.row = dirents_len.row - 1;
 				}
 			}
-			if (pressed & KEY_L) {
+			else if (pressed & KEY_L) {
 				++settings.sort;
 				if (settings.sort >= SORT_LEN)
 					settings.sort -= SORT_LEN;
 
 				break;
 			}
-			if (pressed & KEY_R) {
+			else if (pressed & KEY_R) {
 				++settings.filter;
 				if (settings.filter >= FILTER_LEN)
 					settings.filter -= FILTER_LEN;
