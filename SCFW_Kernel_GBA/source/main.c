@@ -88,7 +88,7 @@ struct settings settings = {
 	.waitstate_patch = 1,
 	.filter = FILTER_ALL,
 	.sort = SORT_NONE,
-	.biosboot = 0
+	.biosboot = 1
 };
 
 union paging_index {
