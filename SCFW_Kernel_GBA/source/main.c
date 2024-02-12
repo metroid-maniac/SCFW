@@ -80,13 +80,15 @@ struct settings {
 	int waitstate_patch;
 	int filter;
 	int sort;
+	int biosboot;
 };
 struct settings settings = {
 	.autosave = 1,
 	.sram_patch = 1,
 	.waitstate_patch = 1,
 	.filter = FILTER_ALL,
-	.sort = SORT_NONE
+	.sort = SORT_NONE,
+	.biosboot = 0
 };
 
 union paging_index {
@@ -288,7 +290,10 @@ void selectFile(char *path) {
 
 		sc_mode(SC_RAM_RO);
 		REG_IE = 0;
-		SoftReset(ROM_RESTART);
+		if (settings.biosboot)
+			__asm volatile("swi 0x26");
+		else
+			SoftReset(ROM_RESTART);
 	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".frm")) {
 		u32 ime = REG_IME;
 		REG_IME = 0;
@@ -424,6 +429,7 @@ void change_settings(char *path) {
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
 		iprintf("%cWaitstate Patch: %i\n", cursor == 2 ? '>' : ' ', settings.waitstate_patch);
+		iprintf("%cBoot games through BIOS: %i\n", cursor == 3 ? '>' : ' ', settings.biosboot);
 		
 		do {
 			scanKeys();
@@ -442,6 +448,9 @@ void change_settings(char *path) {
 			case 2:
 				settings.waitstate_patch = !settings.waitstate_patch;
 				break;
+			case 3:
+				settings.biosboot = !settings.biosboot;
+				break;
 			}
 		}
 		if (pressed & KEY_B) {
@@ -450,12 +459,12 @@ void change_settings(char *path) {
 		if (pressed & KEY_UP) {
 			--cursor;
 			if (cursor < 0)
-				cursor += 3;
+				cursor += 4;
 		}
 		if (pressed & KEY_DOWN) {
 			++cursor;
-			if (cursor >= 3)
-				cursor -= 3;
+			if (cursor >= 4)
+				cursor -= 4;
 		}
 	}
 	
