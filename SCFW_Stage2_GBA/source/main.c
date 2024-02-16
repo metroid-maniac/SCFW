@@ -41,7 +41,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW v0.4.1 GBA-mode\n\n");
+	iprintf("SCFW v0.4.2 GBA-mode\n\n");
 
 	_my_io_scsd.startup();
 	if (fatMountSimple("fat", &_my_io_scsd)) {
