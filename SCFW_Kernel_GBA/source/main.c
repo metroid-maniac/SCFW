@@ -476,6 +476,18 @@ void change_settings(char *path) {
 	}
 }
 
+struct memcnt {
+	u32 unknown1 : 24;
+	u32 ewram_waits : 4;
+	u32 unknown2 : 4;
+};
+
+#define MEMCNT (*(struct memcnt volatile*) 0x4000800)
+
+void try_overclock_ewram() {
+	MEMCNT.ewram_waits = 0x0E;
+}
+
 int main() {
 	irqInit();
 	irqEnable(IRQ_VBLANK);
@@ -517,6 +529,8 @@ int main() {
 		}
 		iprintf("Settings loaded!\n");
 	}
+	
+	try_overclock_ewram();
 
 	if (settings.autosave) {
 		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");

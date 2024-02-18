@@ -71,6 +71,7 @@
 // Variables required for tracking SD state
 u32 _SCSD_relativeCardAddress = 0;	// Preshifted Relative Card Address
 bool isSDHC;
+bool supports_set_block_count;
 //---------------------------------------------------------------
 // Internal SC SD functions
 
@@ -196,31 +197,7 @@ bool _SCSD_cmd_17byte_response_my (u8* responseBuffer, u8 command, u32 data) {
 	return _SCSD_getResponse (responseBuffer, 17);
 }
 
-
-bool _SCSD_initCard (void) {
-	_SCSD_enable_lite();
-	
-	// Give the card time to stabilise
-	_SCSD_sendClocks (NUM_STARTUP_CLOCKS);
-	
-	// Reset the card
-	if (!_SCSD_sendCommand (GO_IDLE_STATE, 0)) {
-		return false;
-	}
-
-	_SCSD_sendClocks (NUM_STARTUP_CLOCKS);
-	
-	// Card is now reset, including it's address
-	_SCSD_relativeCardAddress = 0;
-
-	// Init the card
-	return _SD_InitCard_SDHC (_SCSD_cmd_6byte_response_my, 
-				_SCSD_cmd_17byte_response_my,
-				true,
-				&_SCSD_relativeCardAddress,&isSDHC);
-}
-
-bool _SCSD_readData (void* buffer) {
+bool _SCSD_readData (void* buffer, int hwords) {
 	u8* buff_u8 = (u8*)buffer;
 	u16* buff = (u16*)buffer;
 	volatile register u32 temp;
@@ -232,7 +209,7 @@ bool _SCSD_readData (void* buffer) {
 		return false;
 	}
 
-	i=256;
+	i=hwords;
 	if ((u32)buff_u8 & 0x01) {
 		while(i--) {
 			temp = REG_SCSD_DATAREAD_32;
@@ -256,6 +233,43 @@ bool _SCSD_readData (void* buffer) {
 	temp = REG_SCSD_DATAREAD;
 	
 	return true;
+}
+
+
+bool _SCSD_initCard (void) {
+	_SCSD_enable_lite();
+	
+	// Give the card time to stabilise
+	_SCSD_sendClocks (NUM_STARTUP_CLOCKS);
+	
+	// Reset the card
+	if (!_SCSD_sendCommand (GO_IDLE_STATE, 0)) {
+		return false;
+	}
+
+	_SCSD_sendClocks (NUM_STARTUP_CLOCKS);
+	
+	// Card is now reset, including it's address
+	_SCSD_relativeCardAddress = 0;
+
+	// Init the card
+	bool res = _SD_InitCard_SDHC (_SCSD_cmd_6byte_response_my, 
+				_SCSD_cmd_17byte_response_my,
+				true,
+				&_SCSD_relativeCardAddress,&isSDHC);
+	
+	unsigned char buf[8] = {0};
+	_SCSD_sendCommand(APP_CMD, 0);
+	_SCSD_sendCommand(GET_SCR, 0);
+	_SCSD_readData(buf, 4);
+	if (buf[4] & 2) {
+		// printf("cmd23 enabled.\n");
+		supports_set_block_count = true;
+	} else {
+		supports_set_block_count = false;
+	}
+	
+	return res;
 }
 
 //---------------------------------------------------------------
@@ -313,19 +327,23 @@ bool _SCSD_readSectors_my (u32 sector, u32 numSectors, void* buffer) {
             return false;
         }
 
-        if (!_SCSD_readData(buffer)) {
+        if (!_SCSD_readData(buffer, BYTES_PER_READ >> 1)) {
             //printf("Failed to read data for single sector.\n");
             return false;
         }
     } else {
         //printf("Reading multiple sectors.\n");
+		if (supports_set_block_count)
+			if (!_SCSD_sendCommand(SET_BLOCK_COUNT, numSectors) || !_SCSD_getResponse_R1(responseBuffer)) 
+				return false;
+		
         if (!_SCSD_sendCommand(READ_MULTIPLE_BLOCK, argument)) {
             //printf("Failed to send READ_MULTIPLE_BLOCK command.\n");
             return false;
         }
 
         for (i = 0; i < numSectors; i++, dest += BYTES_PER_READ) {
-            if (!_SCSD_readData(dest)) {
+            if (!_SCSD_readData(dest, BYTES_PER_READ >> 1)) {
                 //printf("Failed to read data at sector %u.\n", i + sector);
                 return false;
             }

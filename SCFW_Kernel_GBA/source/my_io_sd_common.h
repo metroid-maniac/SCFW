@@ -48,8 +48,10 @@
 #define SET_BLOCKLEN 16
 #define READ_SINGLE_BLOCK 17
 #define READ_MULTIPLE_BLOCK 18
+#define SET_BLOCK_COUNT 23
 #define WRITE_BLOCK 24
 #define WRITE_MULTIPLE_BLOCK 25
+#define GET_SCR 51
 #define APP_CMD 55
 #define CMD8 8
 #define CMD58 58
