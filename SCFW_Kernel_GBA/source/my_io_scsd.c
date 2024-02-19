@@ -220,10 +220,11 @@ bool _SCSD_initCard (void) {
 				&_SCSD_relativeCardAddress,&isSDHC);
 }
 
+__attribute__((section(".iwram"), long_call))
 bool _SCSD_readData (void* buffer) {
 	u8* buff_u8 = (u8*)buffer;
 	u16* buff = (u16*)buffer;
-	volatile register u32 temp;
+	register u32 temp;
 	int i;
 	
 	i = BUSY_WAIT_TIMEOUT;
