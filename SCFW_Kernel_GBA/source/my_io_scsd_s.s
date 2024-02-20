@@ -153,7 +153,7 @@ _SCSD_readData_s:
 	ldrh	r4, [r2]
 	tst	r4, r1
 	beq	.L87
-	sub	r3, r3, #1
+	subs	r3, r3, #1
 	cmp	r3, #0
 	bne	.L88
 	mov	r0, r3
