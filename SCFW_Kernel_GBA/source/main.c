@@ -240,11 +240,14 @@ void selectFile(char *path) {
 		do {
 			bytes = fread(filebuf, 1, sizeof filebuf, rom);
 			sc_mode(SC_RAM_RW);
+			dmaCopy(filebuf, &GBA_ROM[total_bytes >> 2], sizeof filebuf);
 			for (u32 i = 0; i < bytes; i += 4) {
+				/*
 				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
 				if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
 					iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
 				}
+				*/
 			}
 			sc_mode(SC_MEDIA);
 			total_bytes += bytes;
