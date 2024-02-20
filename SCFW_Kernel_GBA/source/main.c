@@ -489,6 +489,8 @@ int main() {
 	consoleDemoInit();
 
 	iprintf("SCFW Kernel v0.4.2 GBA-mode\n\n");
+	
+	*(vu16*) 0x04000204	 = 0x40c0;
 
 	_my_io_scsd.startup();
 	if (fatMountSimple("fat", &_my_io_scsd)) {

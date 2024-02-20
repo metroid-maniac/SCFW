@@ -206,11 +206,10 @@ _SCSD_readData_s:
 	b	.L100
 .L97:
 	@ sp needed for prologue
-	pop	{r4}
-	pop	{r1}
-	bx	r1
+	pop	{r4, lr}
+	bx	lr
 .L102:
 	.align	2
 .L101:
 	.word	500000
-	.word	152043522
+	.word	0x0b100002
