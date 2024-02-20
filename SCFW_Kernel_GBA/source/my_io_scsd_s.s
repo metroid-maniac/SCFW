@@ -37,10 +37,13 @@
 @
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+	.section .iwram
+
     .align 4
 	.arm
 	
 	.equ	REG_SCSD_DATAWRITE,	0x09000000
+	.equ	REG_SCSD_DATAREAD,	0x09100000
 	.equ	BYTES_PER_READ,	0x200
 	.equ	SCSD_STS_BUSY,	0x100
 	.equ	BUSY_WAIT_TIMEOUT, 0x10000
@@ -137,3 +140,79 @@ _SCSD_writeData_return:
 	ldmfd	r13!,{r4-r5}
 	bx      r14
 
+@ bool _SCSD_readData_s (u8 *data)
+
+    .global _SCSD_readData_s
+	
+_SCSD_readData_s:
+	push	{r4, lr}
+	mov	r2, #145
+	mov	r1, #128
+	ldr	r3, .L101
+	lsl	r2, r2, #20
+	lsl	r1, r1, #1
+.L88:
+	ldrh	r4, [r2]
+	tst	r4, r1
+	beq	.L87
+	sub	r3, r3, #1
+	cmp	r3, #0
+	bne	.L88
+	mov	r0, r3
+	b	.L97
+.L90:
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0]
+	lsr	r1, r1, #8
+	strb	r1, [r0, #1]
+	add	r0, r0, #2
+	b	.L98
+.L95:
+	ldr	r2, .L101+4
+.L98:
+	cmp	r0, r3
+	bne	.L90
+.L92:
+	mov	r3, #145
+	lsl	r3, r3, #20
+	ldr	r2, [r3]
+	mov	r0, #1
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldr	r2, [r3]
+	ldrh	r3, [r3]
+	b	.L97
+.L91:
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0]
+	add	r0, r0, #2
+	b	.L99
+.L100:
+	ldr	r2, .L101+4
+.L99:
+	cmp	r0, r3
+	bne	.L91
+	b	.L92
+.L87:
+	mov	r2, #128
+	lsl	r2, r2, #2
+	add	r3, r0, r2
+	lsl	r2, r0, #31
+	bmi	.L95
+	b	.L100
+.L97:
+	@ sp needed for prologue
+	pop	{r4}
+	pop	{r1}
+	bx	r1
+.L102:
+	.align	2
+.L101:
+	.word	500000
+	.word	152043522

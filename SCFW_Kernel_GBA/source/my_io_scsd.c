@@ -46,6 +46,8 @@
 #define REG_SCSD_DATAWRITE	    (*(vu16*)(0x09000000))
 #define REG_SCSD_DATAREAD	    (*(vu16*)(0x09100000))
 #define REG_SCSD_DATAREAD_32	(*(vu32*)(0x09100000))
+// abuse misaligned loads to rotate by 16 bits for free
+#define REG_SCSD_DATAREAD_32_ROT16	(*(vu32*)(0x09100002))
 #define REG_SCSD_LITE_ENABLE	(*(vu16*)(0x09440000))
 #define REG_SCSD_LOCK		    (*(vu16*)(0x09FFFFFE))
 	/* bit 0: 1				*/
@@ -74,6 +76,7 @@ bool isSDHC;
 //---------------------------------------------------------------
 // Internal SC SD functions
 
+extern bool _SCSD_readData_s (u8 *buf);
 extern bool _SCSD_writeData_s (u8 *data, u16* crc);
 
 void _SCSD_unlock (void) {
@@ -220,6 +223,7 @@ bool _SCSD_initCard (void) {
 				&_SCSD_relativeCardAddress,&isSDHC);
 }
 
+/*
 __attribute__((section(".iwram"), long_call))
 bool _SCSD_readData (void* buffer) {
 	u8* buff_u8 = (u8*)buffer;
@@ -236,15 +240,15 @@ bool _SCSD_readData (void* buffer) {
 	i=256;
 	if ((u32)buff_u8 & 0x01) {
 		while(i--) {
-			temp = REG_SCSD_DATAREAD_32;
-			temp = REG_SCSD_DATAREAD_32 >> 16;
+			temp = REG_SCSD_DATAREAD_32_ROT16;
+			temp = REG_SCSD_DATAREAD_32_ROT16;
 			*buff_u8++ = (u8)temp;
 			*buff_u8++ = (u8)(temp >> 8);
 		}
 	} else {
 		while(i--) {
-			temp = REG_SCSD_DATAREAD_32;
-			temp = REG_SCSD_DATAREAD_32 >> 16;
+			temp = REG_SCSD_DATAREAD_32_ROT16;
+			temp = REG_SCSD_DATAREAD_32_ROT16;
 			*buff++ = temp; 
 		}
 	}
@@ -258,6 +262,7 @@ bool _SCSD_readData (void* buffer) {
 	
 	return true;
 }
+*/
 
 //---------------------------------------------------------------
 // Functions needed for the external interface
@@ -314,7 +319,7 @@ bool _SCSD_readSectors_my (u32 sector, u32 numSectors, void* buffer) {
             return false;
         }
 
-        if (!_SCSD_readData(buffer)) {
+        if (!_SCSD_readData_s(buffer)) {
             //printf("Failed to read data for single sector.\n");
             return false;
         }
@@ -326,7 +331,7 @@ bool _SCSD_readSectors_my (u32 sector, u32 numSectors, void* buffer) {
         }
 
         for (i = 0; i < numSectors; i++, dest += BYTES_PER_READ) {
-            if (!_SCSD_readData(dest)) {
+            if (!_SCSD_readData_s(dest)) {
                 //printf("Failed to read data at sector %u.\n", i + sector);
                 return false;
             }
