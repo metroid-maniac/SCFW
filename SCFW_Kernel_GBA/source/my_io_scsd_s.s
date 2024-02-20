@@ -169,6 +169,48 @@ _SCSD_readData_s:
 	strb	r1, [r0], # 1
 	lsr	r1, r1, #8
 	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strb	r1, [r0], # 1
+	lsr	r1, r1, #8
+	strb	r1, [r0], # 1
 .L98:
 	cmp	r0, r3
 	bne	.L90
@@ -190,6 +232,34 @@ _SCSD_readData_s:
 	ldr	r2, .L101+4
 	b .L99
 .L91:
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
+	ldr	r1, [r2]
+	ldr	r1, [r2]
+	strh	r1, [r0], # 2
+
 	ldr	r1, [r2]
 	ldr	r1, [r2]
 	strh	r1, [r0], # 2
