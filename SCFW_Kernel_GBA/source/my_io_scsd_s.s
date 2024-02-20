@@ -271,7 +271,7 @@ _SCSD_readData_s:
 	mov	r2, #128
 	lsl	r2, r2, #2
 	add	r3, r0, r2
-	lsl	r2, r0, #31
+	lsls	r2, r0, #31
 	bmi	.L95
 	b	.L100
 .L97:
