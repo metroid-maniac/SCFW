@@ -163,10 +163,9 @@ _SCSD_readData_s:
 .L90:
 	ldr	r1, [r2]
 	ldr	r1, [r2]
-	strb	r1, [r0]
+	strb	r1, [r0], # 1
 	lsr	r1, r1, #8
-	strb	r1, [r0, #1]
-	add	r0, r0, #2
+	strb	r1, [r0], # 1
 	b	.L98
 .L95:
 	ldr	r2, .L101+4
@@ -190,8 +189,7 @@ _SCSD_readData_s:
 .L91:
 	ldr	r1, [r2]
 	ldr	r1, [r2]
-	strh	r1, [r0]
-	add	r0, r0, #2
+	strh	r1, [r0], # 2
 	b	.L99
 .L100:
 	ldr	r2, .L101+4
