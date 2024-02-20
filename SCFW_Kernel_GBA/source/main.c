@@ -163,7 +163,7 @@ void sc_mode(u32 mode)
     REG_IME = ime;
 }
 
-EWRAM_DATA u8 filebuf[0x4000];
+IWRAM_DATA u8 filebuf[0x4000];
 
 u32 pressed;
 bool savingAllowed = true;
@@ -240,7 +240,7 @@ void selectFile(char *path) {
 		do {
 			bytes = fread(filebuf, 1, sizeof filebuf, rom);
 			sc_mode(SC_RAM_RW);
-			dmaCopy(filebuf, &GBA_ROM[total_bytes >> 2], sizeof filebuf);
+			DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 1);
 			for (u32 i = 0; i < bytes; i += 4) {
 				/*
 				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
