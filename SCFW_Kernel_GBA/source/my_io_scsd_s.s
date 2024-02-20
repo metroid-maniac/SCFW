@@ -146,11 +146,9 @@ _SCSD_writeData_return:
 	
 _SCSD_readData_s:
 	push	{r4, lr}
-	mov	r2, #145
-	mov	r1, #128
+	mov	r2, #145 << 20
+	mov	r1, #128 << 1
 	ldr	r3, .L101
-	lsl	r2, r2, #20
-	lsl	r1, r1, #1
 .L88:
 	ldrh	r4, [r2]
 	tst	r4, r1
@@ -215,8 +213,7 @@ _SCSD_readData_s:
 	cmp	r0, r3
 	bne	.L90
 .L92:
-	mov	r3, #145
-	lsl	r3, r3, #20
+	mov	r3, #145 << 20
 	ldr	r2, [r3]
 	mov	r0, #1
 	ldr	r2, [r3]
@@ -268,8 +265,7 @@ _SCSD_readData_s:
 	bne	.L91
 	b	.L92
 .L87:
-	mov	r2, #128
-	lsl	r2, r2, #2
+	mov	r2, #128 << 2
 	add	r3, r0, r2
 	lsls	r2, r0, #31
 	bmi	.L95
