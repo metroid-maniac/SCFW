@@ -160,15 +160,15 @@ _SCSD_readData_s:
 	bne	.L88
 	mov	r0, r3
 	b	.L97
+.L95:
+	ldr	r2, .L101+4
+	b .L98
 .L90:
 	ldr	r1, [r2]
 	ldr	r1, [r2]
 	strb	r1, [r0], # 1
 	lsr	r1, r1, #8
 	strb	r1, [r0], # 1
-	b	.L98
-.L95:
-	ldr	r2, .L101+4
 .L98:
 	cmp	r0, r3
 	bne	.L90
@@ -186,13 +186,13 @@ _SCSD_readData_s:
 	ldr	r2, [r3]
 	ldrh	r3, [r3]
 	b	.L97
+.L100:
+	ldr	r2, .L101+4
+	b .L99
 .L91:
 	ldr	r1, [r2]
 	ldr	r1, [r2]
 	strh	r1, [r0], # 2
-	b	.L99
-.L100:
-	ldr	r2, .L101+4
 .L99:
 	cmp	r0, r3
 	bne	.L91
