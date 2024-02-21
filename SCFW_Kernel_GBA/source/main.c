@@ -214,13 +214,15 @@ void saveSram(char *path) {
 	sc_mode(SC_MEDIA);
 	iprintf("Saving SRAM to %s\n\n", path);
 	FILE *sav = fopen(path, "wb");
-	for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
-		sc_mode(SC_RAM_RO);
-		for (int j = 0; j < sizeof filebuf; ++j)
-			filebuf[j] = GBA_SRAM[i + j];
-		sc_mode(SC_MEDIA);
-		fwrite(filebuf, sizeof filebuf, 1, sav);
-		iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", i);
+	if (sav) {
+		for (int i = 0; i < 0x00010000; i += sizeof filebuf) {
+			sc_mode(SC_RAM_RO);
+			for (int j = 0; j < sizeof filebuf; ++j)
+				filebuf[j] = GBA_SRAM[i + j];
+			sc_mode(SC_MEDIA);
+			fwrite(filebuf, sizeof filebuf, 1, sav);
+			iprintf("\x1b[1A\x1b[K0x%x/0x10000\n", i);
+		}
 		fclose(sav);
 	}
 }
