@@ -255,6 +255,15 @@ void resetPatch(u32 romsize) {
 	iprintf("Soft reset patching...\n");
 	sc_mode(SC_RAM_RW);
 	
+	u32 original_branch = *GBA_ROM;
+	u32 original_entrypoint = ((original_branch & 0x00ffffff) << 2) + 0x08000008;
+	u32 patched_entrypoint = 0x09ffff00;
+	if (romsize > patched_entrypoint - 0x08000000 && !is_empty((s32*) patched_entrypoint, 0x100)) {
+		iprintf("Could not soft reset patch!\n");
+		return;
+	}
+	u32 patched_branch = 0xea000000 | ((patched_entrypoint - 0x08000008) >> 2);
+	
 	int ctr = 0;
 	for (int i = 0; i < romsize >> 2; ++i)
 		if (GBA_ROM[i] == 0x03007ffc) {
@@ -265,14 +274,6 @@ void resetPatch(u32 romsize) {
 		iprintf("Could not soft reset patch!\n");
 		return;
 	}
-	u32 original_branch = *GBA_ROM;
-	u32 original_entrypoint = ((original_branch & 0x00ffffff) << 2) + 0x08000008;
-	u32 patched_entrypoint = 0x09ffff00;
-	if (romsize > patched_entrypoint - 0x08000000 && !is_empty((s32*) patched_entrypoint, 0x100)) {
-		iprintf("Could not soft reset patch!\n");
-		return;
-	}
-	u32 patched_branch = 0xea000000 | ((patched_entrypoint - 0x08000008) >> 2);
 	*GBA_ROM = patched_branch; 
 	int i;
 	for (i = 0; i < irq_hook_bin_len >> 2; ++i)
