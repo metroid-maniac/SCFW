@@ -12,6 +12,7 @@
 #include "WhiteScreenPatch.h"
 
 #include "my_io_scsd.h"
+#include "irq_hook.h"
 
 char *stpcpy(char*, char*);
 int strcasecmp(char*, char*);
@@ -231,6 +232,32 @@ void saveSram(char *path) {
 	}
 }
 
+void resetPatch(u32 romsize) {
+	iprintf("Soft reset patching...\n");
+	sc_mode(SC_RAM_RW);
+	
+	int ctr = 0;
+	for (int i = 0; i < romsize >> 2; ++i)
+		if (GBA_ROM[i] == 0x03007ffc) {
+			GBA_ROM[i] = 0x03fffff4;
+			++ctr;
+		}
+	if (!ctr) {
+		iprintf("Could not soft reset patch\n");
+	}
+	u32 original_branch = *GBA_ROM;
+	u32 original_entrypoint = ((original_branch & 0x00ffffff) << 2) + 0x08000008;
+	// todo: stub, find a better location
+	u32 patched_entrypoint = 0x09000000;
+	u32 patched_branch = 0xea000000 | ((patched_entrypoint - 0x08000008) >> 2);
+	*GBA_ROM = patched_branch; 
+	int i;
+	for (i = 0; i < irq_hook_bin_len >> 2; ++i)
+		i[(u32*) patched_entrypoint] = i[(u32*) irq_hook_bin];
+	i[(u32*) patched_entrypoint] = original_entrypoint;
+	iprintf("Patched!\n");
+}
+
 void selectFile(char *path) {
 	u32 pathlen = strlen(path);
 	if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gba")) {
@@ -292,6 +319,8 @@ void selectFile(char *path) {
 				printf("No need to patch\n");
 			}
 		}
+		
+		resetPatch(romSize);
 
 		sc_mode(SC_MEDIA);
 		iprintf("Let's go.\n");
