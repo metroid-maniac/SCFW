@@ -85,6 +85,7 @@ struct settings {
 	int filter;
 	int sort;
 	int biosboot;
+	int soft_reset_patch;
 };
 struct settings settings = {
 	.autosave = 1,
@@ -92,7 +93,8 @@ struct settings settings = {
 	.waitstate_patch = 1,
 	.filter = FILTER_ALL,
 	.sort = SORT_NONE,
-	.biosboot = 1
+	.biosboot = 1,
+	.soft_reset_patch = 1
 };
 
 union paging_index {
@@ -232,6 +234,23 @@ void saveSram(char *path) {
 	}
 }
 
+bool is_empty(s32 *buf, int size) {
+	bool ones = false;
+	bool zeroes = false;
+	for (int i = 0; i < size; ++i) {
+		if (buf[i] == 0 && !ones) {
+			zeroes = true;
+		}
+		else if (buf[i] == -1 && !zeroes) {
+			ones = true;
+		}
+		else {
+			return false;
+		}
+	}
+	return true;
+}
+
 void resetPatch(u32 romsize) {
 	iprintf("Soft reset patching...\n");
 	sc_mode(SC_RAM_RW);
@@ -243,12 +262,16 @@ void resetPatch(u32 romsize) {
 			++ctr;
 		}
 	if (!ctr) {
-		iprintf("Could not soft reset patch\n");
+		iprintf("Could not soft reset patch!\n");
+		return;
 	}
 	u32 original_branch = *GBA_ROM;
 	u32 original_entrypoint = ((original_branch & 0x00ffffff) << 2) + 0x08000008;
-	// todo: stub, find a better location
-	u32 patched_entrypoint = 0x09000000;
+	u32 patched_entrypoint = 0x09ffff00;
+	if (romsize > patched_entrypoint - 0x08000000 && !is_empty((s32*) patched_entrypoint, 0x100)) {
+		iprintf("Could not soft reset patch!\n");
+		return;
+	}
 	u32 patched_branch = 0xea000000 | ((patched_entrypoint - 0x08000008) >> 2);
 	*GBA_ROM = patched_branch; 
 	int i;
@@ -320,7 +343,8 @@ void selectFile(char *path) {
 			}
 		}
 		
-		resetPatch(romSize);
+		if (settings.soft_reset_patch)
+			resetPatch(romSize);
 
 		sc_mode(SC_MEDIA);
 		iprintf("Let's go.\n");
@@ -467,7 +491,8 @@ void change_settings(char *path) {
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
 		iprintf("%cWaitstate Patch: %i\n", cursor == 2 ? '>' : ' ', settings.waitstate_patch);
-		iprintf("%cBoot games through BIOS: %i\n", cursor == 3 ? '>' : ' ', settings.biosboot);
+		iprintf("%cSoft reset Patch: %i\n", cursor == 3 ? '>' : ' ', settings.soft_reset_patch);
+		iprintf("%cBoot games through BIOS: %i\n", cursor == 4 ? '>' : ' ', settings.biosboot);
 		
 		do {
 			scanKeys();
@@ -486,7 +511,10 @@ void change_settings(char *path) {
 			case 2:
 				settings.waitstate_patch = !settings.waitstate_patch;
 				break;
-			case 3:
+			case 3: 
+				settings.soft_reset_patch = !settings.soft_reset_patch;
+				break;
+			case 4:
 				settings.biosboot = !settings.biosboot;
 				break;
 			}
@@ -497,12 +525,12 @@ void change_settings(char *path) {
 		if (pressed & KEY_UP) {
 			--cursor;
 			if (cursor < 0)
-				cursor += 4;
+				cursor += 5;
 		}
 		if (pressed & KEY_DOWN) {
 			++cursor;
-			if (cursor >= 4)
-				cursor -= 4;
+			if (cursor >= 5)
+				cursor -= 5;
 		}
 	}
 	
