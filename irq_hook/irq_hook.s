@@ -35,6 +35,15 @@ do_reset:
 	mov r0, # 0x9f 
 	msr cpsr, r0
 	
+@ disable sound and dma
+	mov r0, # 0x04000000
+	strh r0, [r0, # 0x84]
+	strh r0, [r0, # 0xba]
+	strh r0, [r0, # 0xc6]
+	strh r0, [r0, # 0xd2]
+	strh r0, [r0, # 0xde]
+
+@ copy to stack and execute
 	adr r1, do_reset_iwram
 	adr r2, do_reset_iwram_end
 do_reset_loop:
