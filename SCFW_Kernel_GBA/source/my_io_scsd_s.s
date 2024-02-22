@@ -230,34 +230,27 @@ _SCSD_readData_s:
 	b .L99
 .L91:
 	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
+	strh	r1, [r0], # 2
+	
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
+	swp	r1, r4, [r2]
 	strh	r1, [r0], # 2
 
-	ldr	r1, [r2]
-	ldr	r1, [r2]
-	strh	r1, [r0], # 2
-
-	ldr	r1, [r2]
 	ldr	r1, [r2]
 	strh	r1, [r0], # 2
 .L99:
