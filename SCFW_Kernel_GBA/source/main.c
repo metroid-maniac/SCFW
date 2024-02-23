@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "Save.h"
 #include "WhiteScreenPatch.h"
@@ -243,18 +244,18 @@ void selectFile(char *path) {
 			bytes = fread(filebuf, 1, sizeof filebuf, rom);
 			sc_mode(SC_RAM_RW);
 			DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
+			/*
 			for (u32 i = 0; i < bytes; i += 4) {
-				/*
 				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
 				if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
 					iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
 				}
-				*/
 			}
+			*/
 			sc_mode(SC_MEDIA);
 			total_bytes += bytes;
 			iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-		} while (bytes);
+		} while (bytes && total_bytes < 0x02000000);
 		fclose(rom);
 
 		if (settings.autosave) {
