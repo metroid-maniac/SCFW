@@ -257,19 +257,16 @@ void resetPatch(u32 romsize) {
 	
 	u32 original_branch = *GBA_ROM;
 	u32 original_entrypoint = ((original_branch & 0x00ffffff) << 2) + 0x08000008;
-	u32 patched_entrypoint;
-	if (romsize <= 0x01000000) {
-		patched_entrypoint = 0x09800000;
-	}
-	else {
-		patched_entrypoint = 0x0a000000;
-		while ((patched_entrypoint -= 4) > 0x080000c0)
+	u32 patched_entrypoint = 0x09ffff00 - irq_hook_bin_len - 4;
+	if (patched_entrypoint < 0x08000000 + romsize)
+		while (patched_entrypoint > 0x080000c0) {
 			if (is_empty((s32*) patched_entrypoint, irq_hook_bin_len + 4))
 				break;
-		if (patched_entrypoint <= 0x080000c0) {
-			iprintf("Could not soft reset patch\n");
-			return;
+			patched_entrypoint -= 4;
 		}
+	if (patched_entrypoint <= 0x080000c0) {
+		iprintf("Could not soft reset patch\n");
+		return;
 	}
 	u32 patched_branch = 0xea000000 | ((patched_entrypoint - 0x08000008) >> 2);
 	
