@@ -355,7 +355,7 @@ void selectFile(char *path) {
 		setLastPlayed(path);
 
 		sc_mode(SC_RAM_RO);
-		REG_IE = 0;
+		REG_IME = 0;
 		if (settings.biosboot)
 			__asm volatile("swi 0x26");
 		else
