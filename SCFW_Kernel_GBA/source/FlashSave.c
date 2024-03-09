@@ -2,7 +2,7 @@
 #include "Save.h"
 #include "FlashSave.h"
 
-extern u32 romSize;
+extern u32 romFileSize;
 
 static const u8 flash1M_V102_find1[48] = {
 	0xaa,0x21,0x19,0x70,0x05,0x4a,0x55,0x21,0x11,0x70,0xb0,0x21,0x19,0x70,0xe0,0x21,
@@ -196,17 +196,17 @@ static const u8 flash_V12Y_replace4[38] = {
 
 bool flash_patchV120(const struct save_type* type)
 {
-	u8* func1 = memsearch8((u8*)0x08000000, romSize, flash_V12X_find1, sizeof(flash_V12X_find1), true);
+	u8* func1 = memsearch8((u8*)0x08000000, romFileSize, flash_V12X_find1, sizeof(flash_V12X_find1), true);
 	if (!func1)
 		return false;
 	twoByteCpy((u16*)func1, (const u16*)flash_V12X_replace1, sizeof(flash_V12X_replace1));
 
-	u8* func2 = memsearch8((u8*)0x08000000, romSize, flash_V12X_find2, sizeof(flash_V12X_find2), true);
+	u8* func2 = memsearch8((u8*)0x08000000, romFileSize, flash_V12X_find2, sizeof(flash_V12X_find2), true);
 	if (!func2)
 		return false;
 	twoByteCpy((u16*)func2, (const u16*)flash_V12X_replace2, sizeof(flash_V12X_replace2));
 
-	u8* func3 = memsearch8((u8*)0x08000000, romSize, flash_V12X_find3, sizeof(flash_V12X_find3), true);
+	u8* func3 = memsearch8((u8*)0x08000000, romFileSize, flash_V12X_find3, sizeof(flash_V12X_find3), true);
 	if (!func3)
 		return false;
 	twoByteCpy((u16*)func3, (const u16*)flash_V12X_replace3, sizeof(flash_V12X_replace3));
@@ -216,22 +216,22 @@ bool flash_patchV120(const struct save_type* type)
 
 bool flash_patchV123(const struct save_type* type)
 {
-	u8* func1 = memsearch8((u8*)0x08000000, romSize, flash_V12Y_find1, sizeof(flash_V12Y_find1), true);
+	u8* func1 = memsearch8((u8*)0x08000000, romFileSize, flash_V12Y_find1, sizeof(flash_V12Y_find1), true);
 	if (!func1)
 		return false;
 	twoByteCpy((u16*)func1, (const u16*)flash_V12Y_replace1, sizeof(flash_V12Y_replace1));
 
-	u8* func2 = memsearch8((u8*)0x08000000, romSize, flash_V12Y_find2, sizeof(flash_V12Y_find2), true);
+	u8* func2 = memsearch8((u8*)0x08000000, romFileSize, flash_V12Y_find2, sizeof(flash_V12Y_find2), true);
 	if (!func2)
 		return false;
 	twoByteCpy((u16*)func2, (const u16*)flash_V12Y_replace2, sizeof(flash_V12Y_replace2));
 
-	u8* func3 = memsearch8((u8*)0x08000000, romSize, flash_V12Y_find3, sizeof(flash_V12Y_find3), true);
+	u8* func3 = memsearch8((u8*)0x08000000, romFileSize, flash_V12Y_find3, sizeof(flash_V12Y_find3), true);
 	if (!func3)
 		return false;
 	twoByteCpy((u16*)func3, (const u16*)flash_V12Y_replace3, sizeof(flash_V12Y_replace3));
 
-	u8* func4 = memsearch8((u8*)0x08000000, romSize, flash_V12Y_find4, sizeof(flash_V12Y_find4), true);
+	u8* func4 = memsearch8((u8*)0x08000000, romFileSize, flash_V12Y_find4, sizeof(flash_V12Y_find4), true);
 	if (!func4)
 		return false;
 	twoByteCpy((u16*)func4, (const u16*)flash_V12Y_replace4, sizeof(flash_V12Y_replace4));
@@ -246,7 +246,7 @@ bool flash_patchV123(const struct save_type* type)
 bool flash_patch512V130(const struct save_type* type)
 {
 	u32* romPos = (u32*)0x08000000;
-	u32 curRomSize = romSize;
+	u32 curromFileSize = romFileSize;
 	u32 startSig[4] = {0};
 	startSig[0] = *(u32*)0x08000000;
 	startSig[1] = *(u32*)0x08000004;
@@ -256,11 +256,11 @@ bool flash_patch512V130(const struct save_type* type)
 	for (int i = 0; i < 2; i++) {
 
 	if (i != 0) {
-		while (romPos < romPos+romSize) {
+		while (romPos < romPos+romFileSize) {
 			// Look for another ROM in 2 in 1 game packs
 			romPos += 0x100000;
-			curRomSize -= 0x100000;
-			if (curRomSize <= 0) break;
+			curromFileSize -= 0x100000;
+			if (curromFileSize <= 0) break;
 			if (romPos[0] == startSig[0]
 			&& romPos[1] == startSig[1]
 			&& romPos[2] == startSig[2]
@@ -269,30 +269,30 @@ bool flash_patch512V130(const struct save_type* type)
 			}
 		}
 
-		if (romPos >= romPos+romSize) break;
+		if (romPos >= romPos+romFileSize) break;
 	}
 
-	u8* func1 = memsearch8((u8*)romPos, curRomSize, flash512_V13X_find1, sizeof(flash512_V13X_find1), true);
+	u8* func1 = memsearch8((u8*)romPos, curromFileSize, flash512_V13X_find1, sizeof(flash512_V13X_find1), true);
 	if (!func1)
 		return false;
 	twoByteCpy((u16*)func1, (const u16*)flash512_V13X_replace1, sizeof(flash512_V13X_replace1));
 
-	u8* func2 = memsearch8((u8*)romPos, curRomSize, flash512_V13X_find2, sizeof(flash512_V13X_find2), true);
+	u8* func2 = memsearch8((u8*)romPos, curromFileSize, flash512_V13X_find2, sizeof(flash512_V13X_find2), true);
 	if (!func2)
 		return false;
 	twoByteCpy((u16*)func2, (const u16*)flash512_V13X_replace2, sizeof(flash512_V13X_replace2));
 
-	u8* func3 = memsearch8((u8*)romPos, curRomSize, flash512_V13X_find3, sizeof(flash512_V13X_find3), true);
+	u8* func3 = memsearch8((u8*)romPos, curromFileSize, flash512_V13X_find3, sizeof(flash512_V13X_find3), true);
 	if (!func3)
 		return false;
 	twoByteCpy((u16*)func3, (const u16*)flash512_V13X_replace3_4, sizeof(flash512_V13X_replace3_4));
 
-	u8* func4 = memsearch8((u8*)romPos, curRomSize, flash512_V13X_find4, sizeof(flash512_V13X_find4), true);
+	u8* func4 = memsearch8((u8*)romPos, curromFileSize, flash512_V13X_find4, sizeof(flash512_V13X_find4), true);
 	if (!func4)
 		return false;
 	twoByteCpy((u16*)func4, (const u16*)flash512_V13X_replace3_4, sizeof(flash512_V13X_replace3_4));
 
-	u8* func5 = memsearch8((u8*)romPos, curRomSize, flash512_V13X_find5, sizeof(flash512_V13X_find5), true);
+	u8* func5 = memsearch8((u8*)romPos, curromFileSize, flash512_V13X_find5, sizeof(flash512_V13X_find5), true);
 	if (!func5)
 		return false;
 	twoByteCpy((u16*)func5, (const u16*)flash512_V13X_replace5, sizeof(flash512_V13X_replace5));
@@ -304,22 +304,22 @@ bool flash_patch512V130(const struct save_type* type)
 
 bool flash_patch1MV102(const struct save_type* type)
 {
-	u8* func1 = memsearch8((u8*)0x08000000, romSize, flash1M_V102_find1, sizeof(flash1M_V102_find1), true);
+	u8* func1 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V102_find1, sizeof(flash1M_V102_find1), true);
 	if (!func1)
 		return false;
 	twoByteCpy((u16*)func1, (const u16*)flash1M_V102_replace1, sizeof(flash1M_V102_replace1));
 
-	u8* func2 = memsearch8((u8*)0x08000000, romSize, flash1M_V102_find2, sizeof(flash1M_V102_find2), true);
+	u8* func2 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V102_find2, sizeof(flash1M_V102_find2), true);
 	if (!func2)
 		return false;
 	twoByteCpy((u16*)func2, (const u16*)flash1M_V102_replace2, sizeof(flash1M_V102_replace2));
 
-	u8* func3 = memsearch8((u8*)0x08000000, romSize, flash1M_V102_find3, sizeof(flash1M_V102_find3), true);
+	u8* func3 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V102_find3, sizeof(flash1M_V102_find3), true);
 	if (!func3)
 		return false;
 	twoByteCpy((u16*)func3, (const u16*)flash1M_V102_replace3, sizeof(flash1M_V102_replace3));
 
-	u8* func4 = memsearch8((u8*)0x08000000, romSize, flash1M_V102_find4, sizeof(flash1M_V102_find4), true);
+	u8* func4 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V102_find4, sizeof(flash1M_V102_find4), true);
 	if (!func4)
 		return false;
 	twoByteCpy((u16*)func4, (const u16*)flash1M_V102_replace4, sizeof(flash1M_V102_replace4));
@@ -329,27 +329,27 @@ bool flash_patch1MV102(const struct save_type* type)
 
 bool flash_patch1MV103(const struct save_type* type)
 {
-	u8* func1 = memsearch8((u8*)0x08000000, romSize, flash1M_V103_find1, sizeof(flash1M_V103_find1), true);
+	u8* func1 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V103_find1, sizeof(flash1M_V103_find1), true);
 	if (!func1)
 		return false;
 	twoByteCpy((u16*)func1, (const u16*)flash1M_V103_replace1, sizeof(flash1M_V103_replace1));
 
-	u8* func2 = memsearch8((u8*)0x08000000, romSize, flash1M_V103_find2, sizeof(flash1M_V103_find2), true);
+	u8* func2 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V103_find2, sizeof(flash1M_V103_find2), true);
 	if (!func2)
 		return false;
 	twoByteCpy((u16*)func2, (const u16*)flash1M_V103_replace2, sizeof(flash1M_V103_replace2));
 
-	u8* func3 = memsearch8((u8*)0x08000000, romSize, flash1M_V103_find3, sizeof(flash1M_V103_find3), true);
+	u8* func3 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V103_find3, sizeof(flash1M_V103_find3), true);
 	if (!func3)
 		return false;
 	twoByteCpy((u16*)func3, (const u16*)flash1M_V103_replace3, sizeof(flash1M_V103_replace3));
 
-	u8* func4 = memsearch8((u8*)0x08000000, romSize, flash1M_V103_find4, sizeof(flash1M_V103_find4), true);
+	u8* func4 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V103_find4, sizeof(flash1M_V103_find4), true);
 	if (!func4)
 		return false;
 	twoByteCpy((u16*)func4, (const u16*)flash1M_V103_replace4, sizeof(flash1M_V103_replace4));
 
-	u8* func5 = memsearch8((u8*)0x08000000, romSize, flash1M_V103_find5, sizeof(flash1M_V103_find5), true);
+	u8* func5 = memsearch8((u8*)0x08000000, romFileSize, flash1M_V103_find5, sizeof(flash1M_V103_find5), true);
 	if (!func5)
 		return false;
 	twoByteCpy((u16*)func5, (const u16*)flash1M_V103_replace5, sizeof(flash1M_V103_replace5));

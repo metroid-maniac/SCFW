@@ -1,16 +1,19 @@
 #include "gba.h"
 #include "Save.h"
-extern u32 romSize;
+extern u32 romFileSize;
 extern bool savingAllowed;
-u32 prefetchPatch[8] = {
-	0xE59F000C,	// LDR  R0, =0x4000204
-	0xE59F100C, // LDR  R1, =0x4000
+static u32 prefetchPatch[6] = {
+	0xE59F0008,	// LDR  R0, =0x4000204
+	0xE3A01901, // MOV  R1, #0x4000
 	0xE4A01000, // STRT R1, [R0]
-	0xE59F0008, // LDR  R0, =0x80000C0 (this changes, depending on the ROM)
-	0xE1A0F000, // MOV  PC, R0
+	0xE59FF000, // LDR  PC, =0x80000C0 (this changes, depending on the ROM)
 	0x04000204,
-	0x00004000,
 	0x080000C0
+};
+
+static const u32 classicNesPatch[2] = {
+	0xE8BD0003,
+	0xE281F00C
 };
 static const u8 sDbzLoGUPatch1[0x24] = 
 	{0x0A, 0x1C, 0x40, 0x0B, 0xE0, 0x21, 0x09, 0x05, 0x41, 0x18, 0x07, 0x31, 0x00, 0x23, 0x08, 0x78,
@@ -77,13 +80,13 @@ void patchGeneralWhiteScreen()
     u32 entryPoint = *(u32*)0x08000000;
 	entryPoint -= 0xEA000000;
 	entryPoint += 2;
-	prefetchPatch[7] = 0x08000000+(entryPoint*4);
+	prefetchPatch[5] = 0x08000000+(entryPoint*4);
 
-	u32 patchOffset = 0x01FFFFDC;
+	u32 patchOffset = 0x01FFFFE4;
 
 	{
 		vu32 *patchAddr = (vu32*)(0x08000000+patchOffset);
-		for(int i=0;i<8;i++){
+		for(int i=0;i<6;i++){
 			patchAddr[i] = prefetchPatch[i];
 		}
 	}
@@ -91,17 +94,20 @@ void patchGeneralWhiteScreen()
 	u32 branchCode = 0xEA000000+(patchOffset/sizeof(u32))-2;
 	*(vu32*)0x08000000 = branchCode;
 
-	u32 searchRange = 0x08000000+romSize;
-	if (romSize > 0x01FFFFDC) searchRange = 0x09FFFFDC;
+	u32 searchRange = 0x08000000+romFileSize;
+	if (romFileSize > 0x01FFFFE4) searchRange = 0x09FFFFE4;
 
 	// General fix for white screen crash
 	// Patch out wait states
 	for (u32 addr = 0x080000C0; addr < searchRange; addr+=4) {
-		if (*(u32*)addr == 0x04000204 &&
-		  (*(u8*)(addr-1) == 0x00 || *(u8*)(addr-1) == 0x03 || *(u8*)(addr-1) == 0x04 || *(u8*)(addr+7) == 0x04
-		  || *(u8*)(addr-1) == 0x08 || *(u8*)(addr-1) == 0x09
-		  || *(u8*)(addr-1) == 0x47 || *(u8*)(addr-1) == 0x81 || *(u8*)(addr-1) == 0x85
-		  || *(u8*)(addr-1) == 0xE0 || *(u8*)(addr-1) == 0xE7 || *(u16*)(addr-2) == 0xFFFE)) 
+			if (*(u32*)addr != 0x04000204) {
+			continue;
+		}
+		const u8 data8_last = *(u8*)(addr-1);
+		 if (data8_last == 0x00 || data8_last == 0x03 || data8_last == 0x04 || *(u8*)(addr+7) == 0x04 || *(u8*)(addr+0xB) == 0x04
+		  || data8_last == 0x08 || data8_last == 0x09
+		  || data8_last == 0x47 || data8_last == 0x81 || data8_last == 0x85
+		  || data8_last == 0xE0 || data8_last == 0xE7 || *(u16*)(addr+4) == 0x4017 || *(u16*)(addr-2) == 0xFFFE)
 		{
 			*(vu32*)addr = 0;
 		}
@@ -113,15 +119,321 @@ void patchGeneralWhiteScreen()
 	}
 }
 
-void patchSpecificGame(){
-    u32 nop = 0xE1A00000;
+static int paddingLevel = 0;
+void fixRomPadding(void) {
+	if (paddingLevel != 1) {
+		return;
+	}
 
-	u32 gameCode = *(u32*)(0x080000AC);
+	// Pad unused ROM area with 0xFFs (trimmed ROMs).
+	// Smallest retail ROM chip is 8 Mbit (1 MiB).
+	s32 romSize = 1;
+	while (romSize < (s32)romFileSize) {
+		romSize += romSize;
+	}
+	if(romSize < 0x100000) romSize = 0x100000;
+	const u32 romLoc = 0x08000000;
+	// toncset((void*)(romLoc + romFileSize), 0xFF, romSize - romFileSize);
+	memset((void*)(romLoc + romFileSize), 0xFF, romSize - romFileSize);
+
+	u32 mirroredSize = romSize;
+	if(romSize == 0x100000) // 1 MiB.
+	{
+		// ROM mirroring for Classic NES Series/others with 8 Mbit ROM.
+		// The ROM is mirrored exactly 4 times.
+		// Thanks to endrift for discovering this.
+		mirroredSize = 0x400000; // 4 MiB.
+		u32 mirrorLoc = romLoc + romSize;
+		do
+		{
+			twoByteCpy((void*)mirrorLoc, (void*)romLoc, romSize);
+			mirrorLoc += romSize;
+		} while(mirrorLoc < romLoc + mirroredSize);
+	}
+
+	/* if (paddingLevel != 2) {
+		return;
+	}
+	if (mirroredSize < 0x02000000) {
+		// Fake "open bus" padding.
+		u16 hword = 0;
+		for(uintptr_t i = romLoc + mirroredSize; i < 0x09FFFFCC; i += 2)
+		{
+			toncset16((u16*)i, hword, 1);
+			hword++;
+		}
+	} */
+}
+
+void patchSpecificGame(){
+    const u32 nop = 0xE1A00000;
+	const u16 nopT = nopT;
+
+	const u32 gameCode = *(u32*)(0x080000AC);
 	if (gameCode == 0x50584C42) {
 		//Astreix & Obelix XXL (Europe)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x50118) == 0x4014)
 			*(u16*)(0x08000000 + 0x50118) = 0x4000;
+	} else if (gameCode == 0x454D4246) {
+		//Classic NES Series: Bomberman (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xB3D5) = 0;
+	} else if (gameCode == 0x45444146) {
+		//Classic NES Series: Castlevania (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1B5EF) = 0;
+	} else if (gameCode == 0x454B4446) {
+		//Classic NES Series: Donkey Kong (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xCB5E) = 0;
+	} else if (gameCode == 0x454D4446) {
+		//Classic NES Series: Dr. Mario (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1D974) = 0;
+	} else if (gameCode == 0x45424546) {
+		//Classic NES Series: Excitebike (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xADDD) = 0;
+	} else if (gameCode == 0x45434946) {
+		//Classic NES Series: Ice Climber (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xCB3B) = 0;
+	} else if (gameCode == 0x454C5A46) {
+		//Classic NES Series: The Legend of Zelda (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x19417) = 0;
+	} else if (gameCode == 0x45524D46 || gameCode == 0x45524D46) {
+		//Classic NES Series: Metroid (USA, Europe)
+		//Classic NES Series: Zelda II: The Adventure of Link (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x20631) = 0;
+	} else if (gameCode == 0x45375046) {
+		//Classic NES Series: Pac-Man (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xCEF7) = 0;
+	} else if (gameCode == 0x454D5346) {
+		//Classic NES Series: Super Mario Bros. (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xCB53) = 0;
+	} else if (gameCode == 0x45565846) {
+		//Classic NES Series: Xevious (USA, Europe)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x14E02) = 0;
+	} else if (gameCode == 0x4A4D5346 || gameCode == 0x4A4B4446 || gameCode == 0x4A434946 || gameCode == 0x4A4D5046 || gameCode == 0x4A565846 || gameCode == 0x4A504D46 || gameCode == 0x4A444446 || gameCode == 0x4A575446) {
+		//Famicom Mini 01: Super Mario Bros. (Japan)
+		//Famicom Mini 02: Donkey Kong (Japan)
+		//Famicom Mini 03: Ice Climber (Japan)
+		//Famicom Mini 06: Pac-Man (Japan)
+		//Famicom Mini 07: Xevious (Japan)
+		//Famicom Mini 08: Mappy (Japan)
+		//Famicom Mini 16: Dig Dug (Japan)
+		//Famicom Mini 19: TwinBee (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+	} else if (gameCode == 0x4A425A46 || gameCode == 0x4A4C5A46 || gameCode == 0x4A4D4246 || gameCode == 0x4A4F5346) {
+		//Famicom Mini 04: Excitebike (Japan)
+		//Famicom Mini 05: Zelda no Densetsu 1: The Hyrule Fantasy (Japan)
+		//Famicom Mini 09: Bomberman (Japan)
+		//Famicom Mini 10: Star Soldier (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0x100), classicNesPatch, 8);
+	} else if (gameCode == 0x4A424D46) {
+		//Famicom Mini 11: Mario Bros. (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xD1C5) = 0;
+	} else if (gameCode == 0x4A4C4346) {
+		//Famicom Mini 12: Clu Clu Land (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xD1BE) = 0;
+	} else if (gameCode == 0x4A464246) {
+		//Famicom Mini 13: Balloon Fight (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xD1EE) = 0;
+	} else if (gameCode == 0x4A574346) {
+		//Famicom Mini 14: Wrecking Crew (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xD6BA) = 0;
+	} else if (gameCode == 0x4A4D4446) {
+		//Famicom Mini 15: Dr. Mario (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1DF1E) = 0;
+	} else if (gameCode == 0x4A425446) {
+		//Famicom Mini 17: Takahashi Meijin no Bouken-jima (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x233CC) = 0;
+	} else if (gameCode == 0x4A4B4D46) {
+		//Famicom Mini 18: Makaimura (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xD3E0) = 0;
+	} else if (gameCode == 0x4A474746) {
+		//Famicom Mini 20: Ganbare Goemon!: Karakuri Douchuu (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xF4), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x5B38D) = 0;
+	} else if (gameCode == 0x45324D46 || gameCode == 0x4A445346) {
+		//Famicom Mini 21: Super Mario Bros. 2 (Japan)
+		//Famicom Mini 30: SD Gundam World: Gachapon Senshi Scramble Wars (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+	} else if (gameCode == 0x4A4D4E46) {
+		//Famicom Mini 22: Nazo no Murasame Jou (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x18614) = 0;
+	} else if (gameCode == 0x4A524D46) {
+		//Famicom Mini 23: Metroid (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1B305) = 0;
+	} else if (gameCode == 0x4A545046) {
+		//Famicom Mini 24: Hikari Shinwa: Palthena no Kagami (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1B8EC) = 0;
+	} else if (gameCode == 0x4A424C46) {
+		//Famicom Mini 25: The Legend of Zelda 2: Link no Bouken (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1F068) = 0;
+	} else if (gameCode == 0x4A4D4646) {
+		//Famicom Mini 26: Famicom Mukashibanashi: Shin Onigashima: Zen, Kouhen (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x31D8F) = 0;
+	} else if (gameCode == 0x4A4B5446) {
+		//Famicom Mini 27: Famicom Tantei Club: Kieta Koukeisha: Zen, Kouhen (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x2D80C) = 0;
+	} else if (gameCode == 0x4A555446) {
+		//Famicom Mini 28: Famicom Tantei Club Part II: Ushiro ni Tatsu Shoujo: Zen, Kouhen (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x2ED9C) = 0;
+	} else if (gameCode == 0x4A444146) {
+		//Famicom Mini 29: Akumajou Dracula (Japan)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x1C81C) = 0;
+	} else if (gameCode == 0x4A525346) {
+		//Famicom Mini: Dai-2-ji Super Robot Taisen (Japan) (Promo)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0xC7F00) = 0;
+	} else if (gameCode == 0x4A5A4746) {
+		//Famicom Mini: Kidou Senshi Z Gundam: Hot Scramble (Japan) (Promo)
+		paddingLevel = 1;
+		//Fix white screen crash
+		twoByteCpy((u16*)(0x08000000 + 0xFC), classicNesPatch, 8);
+
+		//Patch out SRAM check
+		//*(u8*)(0x08000000 + 0x27F1F) = 0;
 	} else if (gameCode == 0x454D4441) {
 		//Doom (USA)
 		//Fix black screen crash
@@ -131,12 +443,12 @@ void patchSpecificGame(){
 		//Doom II (USA/Europe)
 		//Fix black screen crash
 		if (*(u16*)(0x08000000 + 0x2856) == 0x5281)
-			*(u16*)(0x08000000 + 0x2856) = 0x46C0;
+			*(u16*)(0x08000000 + 0x2856) = nopT;
 	} else if (gameCode == 0x45474C41) {
 		//Dragon Ball Z - The Legacy of Goku (USA)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x96E8) == 0x80A8)
-			*(u16*)(0x08000000 + 0x96E8) = 0x46C0;
+			*(u16*)(0x08000000 + 0x96E8) = nopT;
 
 		//Fix "game cannot be played on hardware found" error
 		if (*(u16*)(0x08000000 + 0x356) == 0x7002)
@@ -164,51 +476,51 @@ void patchSpecificGame(){
 		//Dragon Ball Z - The Legacy of Goku (Europe)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x9948) == 0x80B0)
-			*(u16*)(0x08000000 + 0x9948) = 0x46C0;
+			*(u16*)(0x08000000 + 0x9948) = nopT;
 
 		//Fix "game cannot be played on hardware found" error
 		if (*(u16*)(0x08000000 + 0x33C) == 0x7119)
-			*(u16*)(0x08000000 + 0x33C) = 0x46C0;
+			*(u16*)(0x08000000 + 0x33C) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x340) == 0x7159)
-			*(u16*)(0x08000000 + 0x340) = 0x46C0;
+			*(u16*)(0x08000000 + 0x340) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x356) == 0x705A)
-			*(u16*)(0x08000000 + 0x356) = 0x46C0;
+			*(u16*)(0x08000000 + 0x356) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x35A) == 0x7002)
-			*(u16*)(0x08000000 + 0x35A) = 0x46C0;
+			*(u16*)(0x08000000 + 0x35A) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x35E) == 0x7042)
-			*(u16*)(0x08000000 + 0x35E) = 0x46C0;
+			*(u16*)(0x08000000 + 0x35E) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x384) == 0x7001)
-			*(u16*)(0x08000000 + 0x384) = 0x46C0;
+			*(u16*)(0x08000000 + 0x384) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x388) == 0x7041)
-			*(u16*)(0x08000000 + 0x388) = 0x46C0;
+			*(u16*)(0x08000000 + 0x388) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x494C) == 0x7002)
-			*(u16*)(0x08000000 + 0x494C) = 0x46C0;
+			*(u16*)(0x08000000 + 0x494C) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x4950) == 0x7042)
-			*(u16*)(0x08000000 + 0x4950) = 0x46C0;
+			*(u16*)(0x08000000 + 0x4950) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x4978) == 0x7001)
-			*(u16*)(0x08000000 + 0x4978) = 0x46C0;
+			*(u16*)(0x08000000 + 0x4978) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x497C) == 0x7041)
-			*(u16*)(0x08000000 + 0x497C) = 0x46C0;
+			*(u16*)(0x08000000 + 0x497C) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x988E) == 0x7028)
-			*(u16*)(0x08000000 + 0x988E) = 0x46C0;
+			*(u16*)(0x08000000 + 0x988E) = nopT;
 
 		if (*(u16*)(0x08000000 + 0x9992) == 0x7068)
-			*(u16*)(0x08000000 + 0x9992) = 0x46C0;
+			*(u16*)(0x08000000 + 0x9992) = nopT;
 	} else if (gameCode == 0x45464C41) {
 		//Dragon Ball Z - The Legacy of Goku II (USA)
 		*((u32*)0x080000E0) = nop;
-//tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+//twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
         
 		//Fix "game will not run on the hardware found" error
 		if (*(u16*)(0x08000000 + 0x3B8E9E) == 0x1102)
@@ -219,7 +531,7 @@ void patchSpecificGame(){
 	} else if (gameCode == 0x4A464C41) {
 		//Dragon Ball Z - The Legacy of Goku II International (Japan)
 		*((u32*)0x080000E0) = nop;
-//tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+//twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
 
 		//Fix "game will not run on the hardware found" error
 		if (*(u16*)(0x08000000 + 0x3FC8F6) == 0x1102)
@@ -230,7 +542,7 @@ void patchSpecificGame(){
 	} else if (gameCode == 0x50464C41) {
 		//Dragon Ball Z - The Legacy of Goku II (Europe)
 		*((u32*)0x080000E0) = nop;
-//tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+//twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
 
 		//Fix "game will not run on the hardware found" error
 		if (*(u16*)(0x08000000 + 0x6F42B2) == 0x1102)
@@ -241,12 +553,12 @@ void patchSpecificGame(){
 	} else if (gameCode == 0x45464C42) {
 		//2 Games in 1 - Dragon Ball Z - The Legacy of Goku I & II (USA)
 		*((u32*)0x080000E0) = nop;
-//tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+//twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
 
 		if (*(u16*)(0x08000000 + 0x49840) == 0x80A8)
-			*(u16*)(0x08000000 + 0x49840) = 0x46C0;
+			*(u16*)(0x08000000 + 0x49840) = nopT;
 
-		// tonccpy((u16*)0x088000E0, &nop, sizeof(u32));
+		// twoByteCpy((u16*)0x088000E0, &nop, sizeof(u32));
         *((u32*)0x080000E0) = nop;
 
 		//LoG1: Fix "game cannot be played on hardware found" error
@@ -334,7 +646,7 @@ void patchSpecificGame(){
 	} else if (gameCode == 0x45334742) {
 		//Dragon Ball Z - Buu's Fury (USA)
 		*((u32*)0x080000E0) = nop;
-//tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+//twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
 
 		//Fix "game will not run on this hardware" error
 		if (*(u16*)(0x08000000 + 0x8B66) == 0x7032)
@@ -354,15 +666,15 @@ void patchSpecificGame(){
 	} else if (gameCode == 0x45345442) {
 		//Dragon Ball GT - Transformation (USA)
 		*((u32*)0x080000E0) = nop;
-        //tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+        //twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
 	} else if (gameCode == 0x45465542) {
 		//2 Games in 1 - Dragon Ball Z - Buu's Fury & Dragon Ball GT - Transformation (USA)
 		*((u32*)0x080000E0) = nop;
-        //tonccpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
+        //twoByteCpy((u16*)0x080000E0, &nop, sizeof(u32));	// Fix white screen crash
         *((u32*)0x080300E0) = nop;
         *((u32*)0x088000E0) = nop;
-		// tonccpy((u16*)0x080300E0, &nop, sizeof(u32));
-		// tonccpy((u16*)0x088000E0, &nop, sizeof(u32));
+		// twoByteCpy((u16*)0x080300E0, &nop, sizeof(u32));
+		// twoByteCpy((u16*)0x088000E0, &nop, sizeof(u32));
 
 		//DBZ BF: Fix "game will not run on this hardware" error
 		if (*(u16*)(0x08000000 + 0x38B66) == 0x7032)
@@ -383,47 +695,63 @@ void patchSpecificGame(){
 		//Dragon Ball - Advanced Adventure (USA)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x10C240) == 0x8008)
-			*(u16*)(0x08000000 + 0x10C240) = 0x46C0;
+			*(u16*)(0x08000000 + 0x10C240) = nopT;
 	} else if (gameCode == 0x50564442) {
 		//Dragon Ball - Advanced Adventure (Europe)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x10CE3C) == 0x8008)
-			*(u16*)(0x08000000 + 0x10CE3C) = 0x46C0;
+			*(u16*)(0x08000000 + 0x10CE3C) = nopT;
 	} else if (gameCode == 0x4A564442) {
 		//Dragon Ball - Advanced Adventure (Japan)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x10B078) == 0x8008)
-			*(u16*)(0x08000000 + 0x10B078) = 0x46C0;
+			*(u16*)(0x08000000 + 0x10B078) = nopT;
+	} else if (gameCode == 0x45324941) {
+		//Iridion II (USA)
+		//Fix where the game freezes during the first boss battle (but the music continues)
+		if (*(u16*)(0x08000000 + 0x1FA90) == 0xD3F4)
+			*(u16*)(0x08000000 + 0x1FA90) = 0x1C00;
+
+		if (*(u8*)(0x08000000 + 0x1FA95) == 0xD1)
+			*(u8*)(0x08000000 + 0x1FA95) = 0xE0;
+	} else if (gameCode == 0x50324941) {
+		//Iridion II (Europe)
+		//Fix where the game freezes during the first boss battle (but the music continues)
+		if (*(u16*)(0x08000000 + 0x1FB50) == 0xD3F4)
+			*(u16*)(0x08000000 + 0x1FB50) = 0x1C00;
+
+		if (*(u8*)(0x08000000 + 0x1FB55) == 0xD1)
+			*(u8*)(0x08000000 + 0x1FB55) = 0xE0;
 	} else if (gameCode == 0x454B3842) {
 		//Kirby and the Amazing Mirror (USA)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x1515A4) == 0x8008)
-			*(u16*)(0x08000000 + 0x1515A4) = 0x46C0;
+			*(u16*)(0x08000000 + 0x1515A4) = nopT;
 	} else if (gameCode == 0x504B3842) {
 		//Kirby and the Amazing Mirror (Europe)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x151EE0) == 0x8008)
-			*(u16*)(0x08000000 + 0x151EE0) = 0x46C0;
+			*(u16*)(0x08000000 + 0x151EE0) = nopT;
 	} else if (gameCode == 0x4A4B3842) {
 		//Hoshi no Kirby - Kagami no Daimeikyuu (Japan) (V1.1)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x151564) == 0x8008)
-			*(u16*)(0x08000000 + 0x151564) = 0x46C0;
+			*(u16*)(0x08000000 + 0x151564) = nopT;
 	} else if (gameCode == 0x45533342) {
 		//Sonic Advance 3 (USA)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0xBB67C) == 0x8008)
-			*(u16*)(0x08000000 + 0xBB67C) = 0x46C0;
+			*(u16*)(0x08000000 + 0xBB67C) = nopT;
 	} else if (gameCode == 0x50533342) {
 		//Sonic Advance 3 (Europe)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0xBBA04) == 0x8008)
-			*(u16*)(0x08000000 + 0xBBA04) = 0x46C0;
+			*(u16*)(0x08000000 + 0xBBA04) = nopT;
 	} else if (gameCode == 0x4A533342) {
 		//Sonic Advance 3 (Japan)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0xBB9F8) == 0x8008)
-			*(u16*)(0x08000000 + 0xBB9F8) = 0x46C0;
+			*(u16*)(0x08000000 + 0xBB9F8) = nopT;
 	} else if (gameCode == 0x45593241) {
 		//Top Gun - Combat Zones (USA)
 		//Fix softlock when attempting to save (original cartridge does not have a save chip)
@@ -435,12 +763,12 @@ void patchSpecificGame(){
 		//Wario Land 4/Advance (USA/Europe/Japan)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x726) == 0x8008)
-			*(u16*)(0x08000000 + 0x726) = 0x46C0;
+			*(u16*)(0x08000000 + 0x726) = nopT;
 	} else if (gameCode == 0x43415741) {
 		//Wario Land Advance (iQue)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0xE92) == 0x8008)
-			*(u16*)(0x08000000 + 0xE92) = 0x46C0;
+			*(u16*)(0x08000000 + 0xE92) = nopT;
 	} else if (gameCode == 0x45575A52) {
 		//WarioWare: Twisted! (USA)
 		//Patch out tilt controls
@@ -451,21 +779,21 @@ void patchSpecificGame(){
 			*(u16*)(0x08000000 + 0x1376) = 0x08E9;
 			*(u16*)(0x08000000 + 0x1374) = 0x3C6D;
 
-			// tonccpy((u8*)0x08E93C6C, &wwTwistedPatch, 0xF0);
+			// twoByteCpy((u8*)0x08E93C6C, &wwTwistedPatch, 0xF0);
             twoByteCpy((u16*)0x08E93C6C,(const u16*)wwTwistedPatch,0xF0);
 		}
 	} else if (gameCode == 0x4547594B) {
 		//Yoshi Topsy-Turvy (USA)
 		//Fix white screen crash
 		if (*(u16*)(0x08000000 + 0x16E4) == 0x8008)
-			*(u16*)(0x08000000 + 0x16E4) = 0x46C0;
+			*(u16*)(0x08000000 + 0x16E4) = nopT;
 
 		//Patch out tilt controls
 		if (*(u16*)(0x08000000 + 0x1F2) == 0x0802 && *(u16*)(0x08000000 + 0x1F0) == 0x5169) {
 			*(u16*)(0x08000000 + 0x1F2) = 0x087B;
 			*(u16*)(0x08000000 + 0x1F0) = 0x9BE0;
 
-			// tonccpy((u8*)0x087B9BE0, &yoshiTopsyTurvyPatch, 0x18C);
+			// twoByteCpy((u8*)0x087B9BE0, &yoshiTopsyTurvyPatch, 0x18C);
             twoByteCpy((u16*)0x087B9BE0,(const u16*)yoshiTopsyTurvyPatch,0x18C);
 		}
 

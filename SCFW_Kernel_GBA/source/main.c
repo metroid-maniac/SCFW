@@ -234,7 +234,7 @@ void selectFile(char *path) {
 		FILE *rom = fopen(path, "rb");
 		fseek(rom, 0, SEEK_END);
 		u32 romsize = ftell(rom);
-		romSize = romsize;
+		romFileSize = romsize;
 		fseek(rom, 0, SEEK_SET);
 
 		u32 total_bytes = 0;
@@ -274,6 +274,7 @@ void selectFile(char *path) {
 			sc_mode(SC_RAM_RW);
 			patchGeneralWhiteScreen();
 			patchSpecificGame();
+			fixRomPadding();
 			iprintf("Waitstate patch done!\n");
 		}
 

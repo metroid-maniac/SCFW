@@ -54,7 +54,7 @@ struct save_type
 	bool (*  patchFunc)(const struct save_type* type);
 };
 
-extern u32 romSize;
+extern u32 romFileSize;
 const struct save_type* save_findTag();
 
 void twoByteCpy(u16 *dst, const u16 *src, u32 size);

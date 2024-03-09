@@ -4,7 +4,7 @@
 #include "Save.h"
 #include "string.h"
 
-u32 romSize;
+u32 romFileSize;
 
 #define SAVE_TYPE_COUNT		25
 
@@ -45,7 +45,7 @@ const struct save_type* save_findTag()
 {
 	u32  curAddr = 0x080000C0;
 	char saveTag[16];
-	while (curAddr < 0x08000000+romSize) {
+	while (curAddr < 0x08000000+romFileSize) {
 		u32 fst = *(u32*)curAddr;
 		// tonccpy(&saveTag, (u8*)curAddr, 16);
 		((u32*)saveTag)[0] = ((u32*)curAddr)[0];

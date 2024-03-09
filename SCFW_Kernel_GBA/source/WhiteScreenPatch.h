@@ -3,3 +3,5 @@
 void patchGeneralWhiteScreen();
 
 void patchSpecificGame();
+
+void fixRomPadding();
