@@ -16,6 +16,8 @@
 char *stpcpy(char*, char*);
 int strcasecmp(char*, char*);
 
+bool overclock_ewram();
+
 void tryAgain() {
 	iprintf("Critical failure.\nPress A to restart.");
 	for (;;) {
@@ -494,6 +496,10 @@ int main() {
 	iprintf("SCFW Kernel v0.4.5 GBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
+	if (overclock_ewram())
+		iprintf("Overclocked EWRAM\n");
+	else
+		iprintf("Could not overclock EWRAM\n");
 
 	_my_io_scsd.startup();
 	if (fatMountSimple("fat", &_my_io_scsd)) {
