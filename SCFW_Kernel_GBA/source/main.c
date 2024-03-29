@@ -150,8 +150,9 @@ bool filter_selectable(struct dirent *dirent) {
 enum
 {
 	SC_RAM_RO = 0x1,
-	SC_MEDIA = 0x3,
-	SC_FLASH_RW,
+	// Bottom 16MB of SDRAM remains read/writable in this mode.
+	SC_MEDIA = 0x7,
+	SC_FLASH_RW = 0x4,
 	SC_RAM_RW = 0x5,
 };
 
