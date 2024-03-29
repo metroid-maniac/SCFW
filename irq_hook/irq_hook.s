@@ -35,13 +35,14 @@ do_reset:
 	mov r0, # 0x9f 
 	msr cpsr, r0
 	
-@ disable sound and dma
+@ disable sound, dma, and interrupts
 	mov r0, # 0x04000000
 	strh r0, [r0, # 0x84]
 	strh r0, [r0, # 0xba]
 	strh r0, [r0, # 0xc6]
 	strh r0, [r0, # 0xd2]
 	strh r0, [r0, # 0xde]
+	strb r0, [r0, # 0x208]
 
 @ copy to stack and execute
 	adr r1, do_reset_iwram
@@ -63,7 +64,8 @@ do_reset_iwram:
 	mov r1, # 4
 	strh r1, [r0]
 	strh r1, [r0]
-	mov pc, # 0x08000000
+	@ In ARM mode, SWI indexes must be shifted left 16 bits.
+	swi 0x260000
 do_reset_iwram_end:
 
 original_entrypoint:
