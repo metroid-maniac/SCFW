@@ -86,6 +86,7 @@ struct settings {
 	int sort;
 	int biosboot;
 	int soft_reset_patch;
+	int cold_boot_save;
 };
 struct settings settings = {
 	.autosave = 1,
@@ -94,7 +95,8 @@ struct settings settings = {
 	.filter = FILTER_ALL,
 	.sort = SORT_NONE,
 	.biosboot = 1,
-	.soft_reset_patch = 1
+	.soft_reset_patch = 1,
+	.cold_boot_save = 1
 };
 
 union paging_index {
@@ -500,6 +502,7 @@ void change_settings(char *path) {
 		iprintf("%cWaitstate Patch: %i\n", cursor == 2 ? '>' : ' ', settings.waitstate_patch);
 		iprintf("%cSoft reset Patch: %i\n", cursor == 3 ? '>' : ' ', settings.soft_reset_patch);
 		iprintf("%cBoot games through BIOS: %i\n", cursor == 4 ? '>' : ' ', settings.biosboot);
+		iprintf("%cAutosave after cold boot: %i\n", cursor == 5 ? '>' : ' ', settings.cold_boot_save);
 		
 		do {
 			scanKeys();
@@ -524,6 +527,9 @@ void change_settings(char *path) {
 			case 4:
 				settings.biosboot = !settings.biosboot;
 				break;
+			case 5:
+				settings.cold_boot_save = !settings.cold_boot_save;
+				break;
 			}
 		}
 		if (pressed & KEY_B) {
@@ -532,12 +538,12 @@ void change_settings(char *path) {
 		if (pressed & KEY_UP) {
 			--cursor;
 			if (cursor < 0)
-				cursor += 5;
+				cursor += 6;
 		}
 		if (pressed & KEY_DOWN) {
 			++cursor;
-			if (cursor >= 5)
-				cursor -= 5;
+			if (cursor >= 7)
+				cursor -= 6;
 		}
 	}
 	
@@ -547,6 +553,13 @@ void change_settings(char *path) {
 		fwrite(&settings, 1, sizeof settings, settings_file);
 		fclose(settings_file);
 	}
+}
+
+bool has_reset_token() {
+	sc_mode(SC_RAM_RW);
+	u32 reset_token = *(vu32*) 0x09ffff80;
+	sc_mode(SC_MEDIA);
+	return reset_token == 0xa55aa55a;
 }
 
 int main() {
@@ -598,13 +611,18 @@ int main() {
 	}
 
 	if (settings.autosave) {
-		FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
-		if (lastSaved) {
-			char path[PATH_MAX];
-			path[fread(path, 1, PATH_MAX, lastSaved)] = '\0';
-			saveSram(path);
-			remove("/scfw/lastsaved.txt");
+		if (settings.cold_boot_save || has_reset_token()) {
+			FILE *lastSaved = fopen("/scfw/lastsaved.txt", "rb");
+			if (lastSaved) {
+				char path[PATH_MAX];
+				path[fread(path, 1, PATH_MAX, lastSaved)] = '\0';
+				saveSram(path);
+			}
 		}
+		else {
+			iprintf("Skipping autosave due to cold boot.\n");
+		}
+		remove("/scfw/lastsaved.txt");
 	}
 
 	for (;;) {

@@ -56,14 +56,26 @@ do_reset_loop:
 
 do_reset_iwram:
 	mov r0, # 0x0a000000
-	sub r0, r0, #0x02
 	mov r1, # 0x005a
 	add r1, # 0xa500
-	strh r1, [r0]
-	strh r1, [r0]
-	mov r1, # 4
-	strh r1, [r0]
-	strh r1, [r0]
+	orr r1, r1, LSL # 16
+	mov r2, # 5
+	mov r3, # 4
+	
+	@ Write soft reset token 0xa55aa55a to 0x09ffff80
+	strh r1, [r0, # -2]
+	strh r1, [r0, # -2]
+	strh r2, [r0, # -2]
+	strh r2, [r0, # -2]
+	nop
+	nop
+	str r1, [r0, # -0x80]
+
+	@ Enable firmware and reset
+	strh r1, [r0, # -2]
+	strh r1, [r0, # -2]
+	strh r3, [r0, # -2]
+	strh r3, [r0, # -2]
 	@ In ARM mode, SWI indexes must be shifted left 16 bits.
 	swi 0x260000
 do_reset_iwram_end:
