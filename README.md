@@ -16,12 +16,12 @@ You can also select the firmware.frm file from within the kernel to flash SCFW t
 - Automatic SRAM loading & saving
 - Manual SRAM management
 - SDHC
+- Soft reset patch
 ## Planned features
 - Nicer file browser
 - Support for more filetypes with builtin goomba/pocketnes etc.
 - NDS mode
 - Code cleanup, lots of it.
-- Soft reset patch
 - Cache patches after creating them to increase loading speed
 - Faster loading speeds
 - Cheats(?)
