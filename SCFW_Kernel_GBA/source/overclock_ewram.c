@@ -8,8 +8,9 @@ IWRAM_CODE bool overclock_ewram() {
 	REG_IME = 0;
 
 	EWRAM_DATA static volatile int test_var;
+	u32 old_memcnt = MEMCNT;
 	test_var = 0;
-	if (MEMCNT == 0x0D000020) {
+	if (old_memcnt == 0x0D000020) {
 		MEMCNT = 0x0E000020;
 		test_var = -1;
 		if (test_var == -1)
@@ -17,7 +18,7 @@ IWRAM_CODE bool overclock_ewram() {
 		else
 			MEMCNT = 0x0D000020;
 	}
-	else if (MEMCNT == 0x0E000020) {
+	else if (old_memcnt == 0x0E000020) {
 		success = true;
 	}
 
