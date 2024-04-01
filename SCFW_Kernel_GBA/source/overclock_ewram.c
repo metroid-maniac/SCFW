@@ -17,7 +17,7 @@ IWRAM_CODE bool overclock_ewram() {
 		else
 			MEMCNT = 0x0D000020;
 	}
-	else if (MEMCNT == 0x0E0000020) {
+	else if (MEMCNT == 0x0E000020) {
 		success = true;
 	}
 
