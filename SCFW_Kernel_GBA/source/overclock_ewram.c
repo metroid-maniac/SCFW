@@ -25,3 +25,7 @@ IWRAM_CODE bool overclock_ewram() {
 	REG_IME = ime;
 	return success;
 }
+
+IWRAM_CODE void restore_ewram_clocks() {
+	MEMCNT = 0x0D000020;
+}

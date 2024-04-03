@@ -18,6 +18,7 @@ char *stpcpy(char*, char*);
 int strcasecmp(char*, char*);
 
 bool overclock_ewram();
+void restore_ewram_clocks();
 
 void tryAgain() {
 	iprintf("Critical failure.\nPress A to restart.");
@@ -361,6 +362,9 @@ void selectFile(char *path) {
 
 		sc_mode(SC_RAM_RO);
 		REG_IME = 0;
+		
+		restore_ewram_clocks();
+		
 		if (settings.biosboot)
 			__asm volatile("swi 0x26");
 		else
