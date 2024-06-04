@@ -509,14 +509,14 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GB emu\n");
+			iprintf("Loading GB emu\n\n");
 			do {
 				bytes = fread(filebuf, 1, sizeof filebuf, emu);
 				sc_mode(SC_RAM_RW);
 				DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
 				sc_mode(SC_MEDIA);
 				total_bytes += bytes;
-				//iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
+				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
 			} while (bytes && total_bytes < 0x02000000);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
@@ -611,14 +611,14 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GBC emu\n");
+			iprintf("Loading GBC emu\n\n");
 			do {
 				bytes = fread(filebuf, 1, sizeof filebuf, emu);
 				sc_mode(SC_RAM_RW);
 				DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
 				sc_mode(SC_MEDIA);
 				total_bytes += bytes;
-				//iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
+				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
 			} while (bytes && total_bytes < 0x02000000);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
