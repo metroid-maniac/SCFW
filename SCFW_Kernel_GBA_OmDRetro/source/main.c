@@ -16,6 +16,7 @@
 
 char *stpcpy(char*, char*);
 int strcasecmp(char*, char*);
+u32 total_bytes = 0, bytes = 0;
 
 bool overclock_ewram();
 void restore_ewram_clocks();
@@ -100,6 +101,14 @@ struct settings settings = {
 	.cold_boot_save = 1
 };
 
+struct pnes_h {
+    char name[32];
+    u32 filesize; 
+    u32 flags;
+    u32 follow;
+    u32 reserved;
+};
+
 union paging_index {
 	s32 abs;
 	struct {
@@ -123,6 +132,8 @@ bool filter_game(struct dirent *dirent) {
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gbc"))
 		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
+		return true;
 	if (namelen > 3 && !strcasecmp(dirent->d_name + namelen - 3, ".gb"))
 		return true;
 	return false;
@@ -136,6 +147,8 @@ bool filter_selectable(struct dirent *dirent) {
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gbc"))
+		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
 		return true;
 	if (namelen > 3 && !strcasecmp(dirent->d_name + namelen - 3, ".gb"))
 		return true;
@@ -207,8 +220,7 @@ void loadSram(char *path) {
 	FILE *sav = fopen(path, "rb");
 	if (sav) {
 		iprintf("Loading SRAM:\n\n");
-		u32 total_bytes = 0;
-		u32 bytes = 0;
+		total_bytes = 0,bytes = 0;
 		do {
 			bytes = fread(filebuf, 1, sizeof filebuf, sav);
 			sc_mode(SC_RAM_RO);
@@ -299,36 +311,28 @@ void resetPatch(u32 romsize) {
 	iprintf("Patched!\n");
 }
 
-void selectFile(char *path) {
-	u32 pathlen = strlen(path);
-	if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gba")) {
-		FILE *rom = fopen(path, "rb");
-		fseek(rom, 0, SEEK_END);
-		u32 romsize = ftell(rom);
-		romSize = romsize;
-		fseek(rom, 0, SEEK_SET);
-
-		u32 total_bytes = 0;
-		u32 bytes = 0;
-		iprintf("Loading ROM:\n\n");
-		do {
-			bytes = fread(filebuf, 1, sizeof filebuf, rom);
-			sc_mode(SC_RAM_RW);
-			DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
-			/*
-			for (u32 i = 0; i < bytes; i += 4) {
-				GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
-				if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-					iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
-				}
+void FlashROM(char *path, u32 pathlen, FILE *rom, u32 romsize, bool F_EOL){
+	//Placeholder for now
+	//u32 total_bytes = 0, bytes = 0;
+	do {
+		bytes = fread(filebuf, 1, sizeof filebuf, rom);
+		sc_mode(SC_RAM_RW);
+		DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
+		/*
+		for (u32 i = 0; i < bytes; i += 4) {
+			GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
+			if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
+				iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
 			}
-			*/
-			sc_mode(SC_MEDIA);
-			total_bytes += bytes;
-			iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-		} while (bytes && total_bytes < 0x02000000);
-		fclose(rom);
-
+		}
+		*/
+		sc_mode(SC_MEDIA);
+		total_bytes += bytes;
+		iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
+	} while (bytes && total_bytes < 0x02000000);
+	
+	if(F_EOL)
+	{
 		if (settings.autosave) {
 			char savname[PATH_MAX];
 			strcpy(savname, path);
@@ -363,20 +367,41 @@ void selectFile(char *path) {
 		
 		if (settings.soft_reset_patch)
 			resetPatch(romSize);
+	}
+}
 
-		sc_mode(SC_MEDIA);
-		iprintf("Let's go.\n");
-		setLastPlayed(path);
+void L_Seq(char *path){
+	sc_mode(SC_MEDIA);
+	iprintf("Let's go.\n");
+	setLastPlayed(path);
 
-		sc_mode(SC_RAM_RO);
-		REG_IME = 0;
+	sc_mode(SC_RAM_RO);
+	REG_IME = 0;
+	
+	restore_ewram_clocks();
+	
+	if (settings.biosboot)
+		__asm volatile("swi 0x26");
+	else
+		SoftReset(ROM_RESTART);
+}
+
+void selectFile(char *path) {
+	u32 pathlen = strlen(path);
+	if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gba")) {
+		FILE *rom = fopen(path, "rb");
+		fseek(rom, 0, SEEK_END);
+		u32 romsize = ftell(rom);
+		romSize = romsize;
+		fseek(rom, 0, SEEK_SET);
+
+		total_bytes = 0, bytes = 0;
+		iprintf("Loading ROM:\n\n");
 		
-		restore_ewram_clocks();
-		
-		if (settings.biosboot)
-			__asm volatile("swi 0x26");
-		else
-			SoftReset(ROM_RESTART);
+		//FlashROM(char *path, u32 pathlen, FILE *rom, u32 bytes, u32 total_bytes, bool F_EOL)
+		FlashROM(path,pathlen,rom,romSize,true);
+		fclose(rom);
+		L_Seq(path);
 	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".frm")) {
 		u32 ime = REG_IME;
 		REG_IME = 0;
@@ -431,8 +456,8 @@ void selectFile(char *path) {
 			}
 			*GBA_BUS = SC_FLASH_IDLE;
 
-			u32 total_bytes = 0;
-			u32 bytes = 0;
+			total_bytes = 0;
+			bytes = 0;
 			iprintf("Programming flash.\n\n");
 			do {
 				sc_mode(SC_MEDIA);
@@ -495,7 +520,8 @@ void selectFile(char *path) {
 			}
 		}
 	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gb")){
-		u32 total_bytes = 0,bytes = 0,romsize = 0;
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
 		FILE *emu = fopen("/scfw/gb.gba", "rb");
 		if (!emu) {
 			iprintf("GB emu not found!\n");
@@ -510,94 +536,21 @@ void selectFile(char *path) {
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
 			iprintf("Loading GB emu\n\n");
-			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, emu);
-				sc_mode(SC_RAM_RW);
-				DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
-				sc_mode(SC_MEDIA);
-				total_bytes += bytes;
-				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-			} while (bytes && total_bytes < 0x02000000);
+			FlashROM(path,pathlen,emu,romSize,false);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
-			romsize = ftell(emu)+ftell(rom);
-			romSize = romsize;
+			romsize = ftell(rom);
+			romSize += romsize;
 			fseek(rom, 0, SEEK_SET);
-			total_bytes = 0;
-			bytes = 0;
 			iprintf("Loading ROM:\n\n");
-			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, rom);
-				sc_mode(SC_RAM_RW);
-				DMA_Copy(3, filebuf, &GBA_ROM[ftell(emu)+total_bytes >> 2], DMA32 | bytes >> 2);
-				/*
-				for (u32 i = 0; i < bytes; i += 4) {
-					GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
-					if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-						iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
-					}
-				}
-				*/
-				sc_mode(SC_MEDIA);
-				total_bytes += bytes;
-				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize-ftell(emu));
-			} while (bytes && total_bytes < 0x02000000);
+			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
 			fclose(emu);
-		}
-		
-		if(romsize > 0){
-			if (settings.autosave) {
-				char savname[PATH_MAX];
-				strcpy(savname, path);
-				strcpy(savname + pathlen - 4, ".sav");
-				loadSram(savname);
-			
-				FILE *lastSaved = fopen("/scfw/lastsaved.txt", "wb");
-				fwrite(savname, pathlen, 1, lastSaved);
-				fclose(lastSaved);
-			}
-			
-			if (settings.waitstate_patch) {
-				iprintf("Applying waitstate patches...\n");
-				sc_mode(SC_RAM_RW);
-				patchGeneralWhiteScreen();
-				patchSpecificGame();
-				iprintf("Waitstate patch done!\n");
-			}
-			
-			if (settings.sram_patch) {
-				iprintf("Applying SRAM patch...\n");
-				sc_mode(SC_RAM_RW);
-				const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
-				if (saveType != NULL && saveType->patchFunc != NULL){
-					bool done = saveType->patchFunc(saveType);
-					if(!done)
-						printf("Save Type Patch Error\n");
-				} else {
-					printf("No need to patch\n");
-				}
-			}
-			
-			if (settings.soft_reset_patch)
-				resetPatch(romSize);
-			
-			sc_mode(SC_MEDIA);
-			iprintf("Let's go.\n");
-			setLastPlayed(path);
-			
-			sc_mode(SC_RAM_RO);
-			REG_IME = 0;
-			
-			restore_ewram_clocks();
-			
-			if (settings.biosboot)
-				__asm volatile("swi 0x26");
-			else
-				SoftReset(ROM_RESTART);
+			L_Seq(path);
 		}
 	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 4, ".gbc")){
-		u32 total_bytes = 0,bytes = 0,romsize = 0;
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
 		FILE *emu = fopen("/scfw/gbc.gba", "rb");
 		if (!emu) {
 			iprintf("GBC emu not found!\n");
@@ -611,92 +564,70 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GBC emu\n\n");
+			iprintf("Loading GB emu\n\n");
+			FlashROM(path,pathlen,emu,romSize,false);
+			FILE *rom = fopen(path, "rb");
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			romSize += romsize;
+			fseek(rom, 0, SEEK_SET);
+			iprintf("Loading ROM:\n\n");
+			FlashROM(path,pathlen,rom,romSize,true);
+			fclose(rom);
+			fclose(emu);
+			L_Seq(path);
+		}
+	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 4, ".nes")){
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
+		FILE *emu = fopen("/scfw/nes.gba", "rb");
+		if (!emu) {
+			iprintf("NES emu not found!\n");
 			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, emu);
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!(pressed & KEY_A));
+		} else {
+			fseek(emu,0,SEEK_END);
+			romsize = ftell(emu);
+			romSize = romsize;
+			fseek(emu, 0, SEEK_SET);
+			iprintf("Loading NES emu\n\n");
+			FlashROM(path,pathlen,emu,romSize,false);
+			//Flash header here
+			//struct pnes_h *header = (void*) (0x08000000 + total_size);
+			//total_size += sizeof *header
+			struct pnes_h *header = (void*) (0x08000000 + romSize);
+			//strcpy(header->name, basename(path));
+			strcpy(header->name, "PocketNES Test");
+			//romSize += sizeof *header;
+			//
+			FILE *rom = fopen(path, "rb");
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			header->filesize = romsize;
+			header->flags |= (1 << 4); //hard code for now
+			header->follow = 0;
+			header->reserved = 0;
+			romSize += sizeof *header;
+			//Loop here
+			do {
+				bytes = fread(filebuf, 1, sizeof filebuf, header);
 				sc_mode(SC_RAM_RW);
 				DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
 				sc_mode(SC_MEDIA);
 				total_bytes += bytes;
 				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-			} while (bytes && total_bytes < 0x02000000);
-			FILE *rom = fopen(path, "rb");
-			fseek(rom, 0, SEEK_END);
-			romsize = ftell(emu)+ftell(rom);
-			romSize = romsize;
+			} while (bytes && romSize < 0x02000000);
+			//
+			romSize += romsize;
 			fseek(rom, 0, SEEK_SET);
-			total_bytes = 0;
-			bytes = 0;
 			iprintf("Loading ROM:\n\n");
-			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, rom);
-				sc_mode(SC_RAM_RW);
-				DMA_Copy(3, filebuf, &GBA_ROM[ftell(emu)+total_bytes >> 2], DMA32 | bytes >> 2);
-				/*
-				for (u32 i = 0; i < bytes; i += 4) {
-					GBA_ROM[(i + total_bytes) >> 2] = *(vu32*) &filebuf[i];
-					if (GBA_ROM[(i + total_bytes) >> 2] != *(vu32*) &filebuf[i]) {
-						iprintf("\x1b[1A\x1b[KSDRAM write failed at\n0x%x\n\n", i + total_bytes);
-					}
-				}
-				*/
-				sc_mode(SC_MEDIA);
-				total_bytes += bytes;
-				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize-ftell(emu));
-			} while (bytes && total_bytes < 0x02000000);
+			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
 			fclose(emu);
-		}
-		
-		if(romsize > 0){
-			if (settings.autosave) {
-				char savname[PATH_MAX];
-				strcpy(savname, path);
-				strcpy(savname + pathlen - 4, ".sav");
-				loadSram(savname);
-			
-				FILE *lastSaved = fopen("/scfw/lastsaved.txt", "wb");
-				fwrite(savname, pathlen, 1, lastSaved);
-				fclose(lastSaved);
-			}
-			
-			if (settings.waitstate_patch) {
-				iprintf("Applying waitstate patches...\n");
-				sc_mode(SC_RAM_RW);
-				patchGeneralWhiteScreen();
-				patchSpecificGame();
-				iprintf("Waitstate patch done!\n");
-			}
-			
-			if (settings.sram_patch) {
-				iprintf("Applying SRAM patch...\n");
-				sc_mode(SC_RAM_RW);
-				const struct save_type* saveType = savingAllowed ? save_findTag() : NULL;
-				if (saveType != NULL && saveType->patchFunc != NULL){
-					bool done = saveType->patchFunc(saveType);
-					if(!done)
-						printf("Save Type Patch Error\n");
-				} else {
-					printf("No need to patch\n");
-				}
-			}
-			
-			if (settings.soft_reset_patch)
-				resetPatch(romSize);
-			
-			sc_mode(SC_MEDIA);
-			iprintf("Let's go.\n");
-			setLastPlayed(path);
-			
-			sc_mode(SC_RAM_RO);
-			REG_IME = 0;
-			
-			restore_ewram_clocks();
-			
-			if (settings.biosboot)
-				__asm volatile("swi 0x26");
-			else
-				SoftReset(ROM_RESTART);
+			L_Seq(path);
 		}
 	} else {
 		iprintf("Unrecognised file extension!\n");
