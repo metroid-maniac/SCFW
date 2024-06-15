@@ -16,7 +16,7 @@ For Game Boy / Game Boy Color, you need to download your preferred Goomba fork/b
 For NES/Famicom, you need to download your preferred PocketNES fork/binary and rename it to:
 - nes.gba
 
-Once you have those two files, transfer these to the scfw folder.
+Once you have those files, transfer these to the scfw folder.
 You should find the ff. files within the scfw folder:
 - kernel.gba
 - gb.gba
