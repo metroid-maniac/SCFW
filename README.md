@@ -7,13 +7,13 @@ Download the zip file and extract the contents to the root directory of the sdca
 This should replace the existing kernel.gba along with adding goomba support in order to play Game Boy / Game Boy Color games.
 
 ## Prerequisites
-For Game Boy / Game Boy Color, you need to download your preferred Goomba fork and rename it to:
+For Game Boy / Game Boy Color, you need to download your preferred Goomba fork/binary and rename it to:
 - gbc.gba
     - For Game Boy Color emulation
 - gb.gba
 	- For Game Boy emulation
 
-For NES/Famicom, you need to download your preferred Goomba fork and rename it to:
+For NES/Famicom, you need to download your preferred PocketNES fork/binary and rename it to:
 - nes.gba
 
 Once you have those two files, transfer these to the scfw folder.
