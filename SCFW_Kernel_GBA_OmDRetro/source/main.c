@@ -102,11 +102,11 @@ struct settings settings = {
 };
 
 struct pnes_h {
-    char name[32];
-    u32 filesize; 
-    u32 flags;
-    u32 follow;
-    u32 reserved;
+    char name[32]; //32 bytes ROM Title
+    u32 filesize; //write 4 bytes
+    u32 flags; //write 4 bytes
+    u32 follow; //write 4 bytes
+    u32 reserved; //write 4 bytes
 };
 
 union paging_index {
@@ -309,6 +309,12 @@ void resetPatch(u32 romsize) {
 		i[(u32*) patched_entrypoint] = i[(u32*) irq_hook_bin];
 	i[(u32*) patched_entrypoint] = original_entrypoint;
 	iprintf("Patched!\n");
+}
+
+char *basename(char *path)
+{
+    char *base = strrchr(path, '/');
+    return base ? base+1 : path;
 }
 
 void FlashROM(char *path, u32 pathlen, FILE *rom, u32 romsize, bool F_EOL){
@@ -564,7 +570,7 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GB emu\n\n");
+			iprintf("Loading GBC emu\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
@@ -595,37 +601,44 @@ void selectFile(char *path) {
 			fseek(emu, 0, SEEK_SET);
 			iprintf("Loading NES emu\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
-			//Flash header here
-			//struct pnes_h *header = (void*) (0x08000000 + total_size);
-			//total_size += sizeof *header
-			struct pnes_h *header = (void*) (0x08000000 + romSize);
-			//strcpy(header->name, basename(path));
-			strcpy(header->name, "PocketNES Test");
-			//romSize += sizeof *header;
-			//
+			struct pnes_h header;
+			char bname_b[32];
+			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+			bname_b[sizeof(bname_b) - 1] = '\0'; 
+			strcpy(header.name, bname_b);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
 			romsize = ftell(rom);
-			header->filesize = romsize;
-			header->flags |= (1 << 4); //hard code for now
-			header->follow = 0;
-			header->reserved = 0;
-			romSize += sizeof *header;
-			//Loop here
-			do {
-				bytes = fread(filebuf, 1, sizeof filebuf, header);
-				sc_mode(SC_RAM_RW);
-				DMA_Copy(3, filebuf, &GBA_ROM[total_bytes >> 2], DMA32 | bytes >> 2);
-				sc_mode(SC_MEDIA);
-				total_bytes += bytes;
-				iprintf("\x1b[1A\x1b[K0x%x/0x%x\n", total_bytes, romsize);
-			} while (bytes && romSize < 0x02000000);
-			//
+			header.filesize = 0;
+			header.filesize = romsize;
+			header.flags = 0;
+			iprintf("Analyzing ROM...\n\n");
+			if (strcasestr(basename(path), "(E)") || strcasestr(basename(path), "(EUR)") || strcasestr(basename(path), "(Europe)")) {
+				header.flags |= (1 << 2);
+				iprintf("PAL Timing\n");
+			} else {
+				header.flags |= (1 << 4);
+				iprintf("NTSC Timing\n");
+			}
+			header.follow = 0;
+			header.reserved = 0;
+			FILE *out_h = fopen("/scfw/pnes_h.dat", "wb");
+			fwrite(&header,1, sizeof header, out_h);
+			fclose(out_h);
+			out_h = fopen("/scfw/pnes_h.dat", "rb");
+			fseek(out_h,0,SEEK_END);
+			romsize = ftell(out_h);
+			romSize += romsize;
+			fseek(out_h, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_h,romSize,false);
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
 			romSize += romsize;
 			fseek(rom, 0, SEEK_SET);
 			iprintf("Loading ROM:\n\n");
 			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
+			fclose(out_h);
 			fclose(emu);
 			L_Seq(path);
 		}
@@ -642,7 +655,7 @@ void selectFile(char *path) {
 void change_settings(char *path) {
 	for (int cursor = 0;;) {
 		iprintf("\x1b[2J"
-		        "SCFW Kernel v0.5.2-goomba GBA-mode\n\n");
+		        "SCFW Kernel v0.5.2-pocketN GBA-mode\n\n");
 		
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
@@ -718,7 +731,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.5.2-goomba GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.5.2-pocketN GBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
 	if (overclock_ewram())
