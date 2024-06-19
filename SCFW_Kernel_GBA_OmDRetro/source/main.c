@@ -102,11 +102,24 @@ struct settings settings = {
 };
 
 struct pnes_h {
-    char name[32]; //32 bytes ROM Title
-    u32 filesize; //write 4 bytes
-    u32 flags; //write 4 bytes
-    u32 follow; //write 4 bytes
-    u32 reserved; //write 4 bytes
+	char name[32];
+	u32 filesize;
+	u32 flags;
+	u32 follow;
+	u32 reserved;
+};
+
+struct smsa_h {
+	u32 id;
+	u32 filesize;
+	u16 flags;
+	u16 hacks;
+	u32 follow;
+	u32 B_flag;
+	u32 res0;
+	u32 res1;
+	u32 res2;
+	char name[32];
 };
 
 union paging_index {
@@ -134,7 +147,11 @@ bool filter_game(struct dirent *dirent) {
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
 		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".sms"))
+		return true;
 	if (namelen > 3 && !strcasecmp(dirent->d_name + namelen - 3, ".gb"))
+		return true;
+	if (namelen > 3 && (!strcasecmp(dirent->d_name + namelen - 3, ".gg") || !strcasecmp(dirent->d_name + namelen - 3, ".sg")))
 		return true;
 	return false;
 }
@@ -150,7 +167,11 @@ bool filter_selectable(struct dirent *dirent) {
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
 		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".sms"))
+		return true;
 	if (namelen > 3 && !strcasecmp(dirent->d_name + namelen - 3, ".gb"))
+		return true;
+	if (namelen > 3 && (!strcasecmp(dirent->d_name + namelen - 3, ".gg") || !strcasecmp(dirent->d_name + namelen - 3, ".sg")))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".frm"))
 		return true;
@@ -311,6 +332,15 @@ void resetPatch(u32 romsize) {
 	iprintf("Patched!\n");
 }
 
+u32 u32conv(const char* text) {
+    u32 result = 0;
+    for (int i = 0; i < 3; ++i) {
+        result <<= 8; // Shift left by 8 bits
+        result |= (u32)text[i]; // OR with ASCII value
+    }
+    return result;
+}
+
 char *basename(char *path)
 {
     char *base = strrchr(path, '/');
@@ -404,7 +434,6 @@ void selectFile(char *path) {
 		total_bytes = 0, bytes = 0;
 		iprintf("Loading ROM:\n\n");
 		
-		//FlashROM(char *path, u32 pathlen, FILE *rom, u32 bytes, u32 total_bytes, bool F_EOL)
 		FlashROM(path,pathlen,rom,romSize,true);
 		fclose(rom);
 		L_Seq(path);
@@ -525,12 +554,16 @@ void selectFile(char *path) {
 				saveSram(path);
 			}
 		}
-	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gb")){
+	} else if ((pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gb")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gbc")) ){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/gb.gba", "rb");
+		FILE *emu;
+		if (!strcasecmp(path + pathlen - 3, ".gb"))
+			emu = fopen("/scfw/gb.gba", "rb");
+		else
+			emu = fopen("/scfw/gbc.gba", "rb");
 		if (!emu) {
-			iprintf("GB emu not found!\n");
+			iprintf("GB/GBC emu not found!\n");
 			do {
 				scanKeys();
 				pressed = keysDownRepeat();
@@ -541,7 +574,7 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GB emu\n\n");
+			iprintf("Loading Goomba \n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
@@ -554,36 +587,7 @@ void selectFile(char *path) {
 			fclose(emu);
 			L_Seq(path);
 		}
-	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 4, ".gbc")){
-		u32 romsize = 0;
-		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/gbc.gba", "rb");
-		if (!emu) {
-			iprintf("GBC emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
-		} else {
-			fseek(emu,0,SEEK_END);
-			romsize = ftell(emu);
-			romSize = romsize;
-			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading GBC emu\n\n");
-			FlashROM(path,pathlen,emu,romSize,false);
-			FILE *rom = fopen(path, "rb");
-			fseek(rom, 0, SEEK_END);
-			romsize = ftell(rom);
-			romSize += romsize;
-			fseek(rom, 0, SEEK_SET);
-			iprintf("Loading ROM:\n\n");
-			FlashROM(path,pathlen,rom,romSize,true);
-			fclose(rom);
-			fclose(emu);
-			L_Seq(path);
-		}
-	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 4, ".nes")){
+	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".nes")){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
 		FILE *emu = fopen("/scfw/nes.gba", "rb");
@@ -599,7 +603,7 @@ void selectFile(char *path) {
 			romsize = ftell(emu);
 			romSize = romsize;
 			fseek(emu, 0, SEEK_SET);
-			iprintf("Loading NES emu\n\n");
+			iprintf("Loading PocketNES\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
 			struct pnes_h header;
 			char bname_b[32];
@@ -615,10 +619,10 @@ void selectFile(char *path) {
 			iprintf("Analyzing ROM...\n\n");
 			if (strcasestr(basename(path), "(E)") || strcasestr(basename(path), "(EUR)") || strcasestr(basename(path), "(Europe)")) {
 				header.flags |= (1 << 2);
-				iprintf("PAL Timing\n");
+				iprintf("PAL timing\n");
 			} else {
 				header.flags |= (1 << 4);
-				iprintf("NTSC Timing\n");
+				iprintf("NTSC timing\n");
 			}
 			header.follow = 0;
 			header.reserved = 0;
@@ -626,6 +630,92 @@ void selectFile(char *path) {
 			fwrite(&header,1, sizeof header, out_h);
 			fclose(out_h);
 			out_h = fopen("/scfw/pnes_h.dat", "rb");
+			fseek(out_h,0,SEEK_END);
+			romsize = ftell(out_h);
+			romSize += romsize;
+			fseek(out_h, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_h,romSize,false);
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			romSize += romsize;
+			fseek(rom, 0, SEEK_SET);
+			iprintf("Loading ROM:\n\n");
+			FlashROM(path,pathlen,rom,romSize,true);
+			fclose(rom);
+			fclose(out_h);
+			fclose(emu);
+			L_Seq(path);
+		}
+	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".sms")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gg")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".sg"))){
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
+		FILE *emu = fopen("/scfw/smsa.gba", "rb");
+		if (!emu) {
+			iprintf("SMS/GG/SG-1000 emu not found!\n");
+			do {
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!(pressed & KEY_A));
+		} else {
+			fseek(emu,0,SEEK_END);
+			romsize = ftell(emu);
+			romSize = romsize;
+			fseek(emu, 0, SEEK_SET);
+			iprintf("Loading SMSAdvance\n\n");
+			FlashROM(path,pathlen,emu,romSize,false);
+			struct smsa_h header;
+			header.id = u32conv("SMS") | (0x1A << 24);
+			FILE *rom = fopen(path, "rb");
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			header.filesize = 0;
+			header.filesize = romsize;
+			header.flags = 0;
+			iprintf("Analyzing ROM...\n\n");
+			if (strcasestr(basename(path), "(E)") || strcasestr(basename(path), "(EUR)") || strcasestr(basename(path), "(Europe)")) {
+				header.flags |= (1 << 0);
+				iprintf("PAL timing\n\n");
+			} else {
+				header.flags |= (0 << 0);
+				iprintf("NTSC timing\n\n");
+			}
+			if (strcasestr(basename(path), "(J)") || strcasestr(basename(path), "(JAPAN)")) {
+				header.flags |= (1 << 1);
+				iprintf("Japan ROM\n\n");
+			} else {
+				header.flags |= (0 << 1);
+				iprintf("USA/EUR ROM\n\n");
+			}
+			if(!strcasecmp(path + pathlen - 4, ".sms") || !strcasecmp(path + pathlen - 3, ".sg"))
+				header.flags |= (0 << 2);
+			else
+				header.flags |= (1 << 2);
+			header.hacks = 0;
+			header.follow = 0;
+			header.B_flag = 0;
+			/*
+			if (strcasestr(basename(path), "[BIOS]")) {
+				header.B_flag |= (1 << 0);
+				iprintf("BIOS ROM detected\n\n");
+			}
+			else
+			{
+				header.B_flag |= (0 << 0);
+				iprintf("Non-BIOS ROM\n\n");
+			}
+			*/
+			header.res0 = 0;
+			header.res1 = 0;
+			header.res2 = 0;
+			char bname_b[32];
+			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+			bname_b[sizeof(bname_b) - 1] = '\0'; 
+			strcpy(header.name, bname_b);
+			FILE *out_h = fopen("/scfw/smsa_h.dat", "wb");
+			fwrite(&header,1, sizeof header, out_h);
+			fclose(out_h);
+			out_h = fopen("/scfw/smsa_h.dat", "rb");
 			fseek(out_h,0,SEEK_END);
 			romsize = ftell(out_h);
 			romSize += romsize;
@@ -655,7 +745,7 @@ void selectFile(char *path) {
 void change_settings(char *path) {
 	for (int cursor = 0;;) {
 		iprintf("\x1b[2J"
-		        "SCFW Kernel v0.5.2-pocketN GBA-mode\n\n");
+		        "SCFW Kernel v0.5.2-SMSAdv GBA-mode\n\n");
 		
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
@@ -731,7 +821,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.5.2-pocketN GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.5.2-SMSAdv GBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
 	if (overclock_ewram())
