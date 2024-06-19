@@ -4,7 +4,7 @@ This branch is primarily for those who'd like to test out/play with new revision
 
 ## Installation
 Download the zip file and extract the contents to the root directory of the sdcard.
-This should replace the existing kernel.gba along with adding goomba support in order to play Game Boy / Game Boy Color games.
+This should replace the existing kernel.gba along with adding multiple emulation binaries.
 
 ## Prerequisites
 For Game Boy / Game Boy Color, you need to download your preferred Goomba fork/binary and rename it to:
@@ -16,14 +16,22 @@ For Game Boy / Game Boy Color, you need to download your preferred Goomba fork/b
 For NES/Famicom, you need to download your preferred PocketNES fork/binary and rename it to:
 - nes.gba
 
+For Sega Master System, Game Gear, and Sega Game 1000 (Sega 1000), you need to download your preferred SMSAdvance fork/binary and rename it to:
+- smsa.gba
+
 Once you have those files, transfer these to the scfw folder.
 You should find the ff. files within the scfw folder:
 - kernel.gba
 - gb.gba
 - gbc.gba
 - nes.gba
+- smsa.gba
 
 ## Differences between this and the main kernel:
+- SMSAdvance support ✅
+    - Loads Sega Master System games (*.sms)
+	- Loads Game Gear games (*.gg)
+	- Loads Sega Game 1000 / Sega 1000 games (*.sg)
 - PocketNES support ✅
     - Loads NES / Famicom games (*.nes)
     - Automatic ROM region detection (PAL / NTSC timing)
@@ -44,7 +52,9 @@ You should find the ff. files within the scfw folder:
 - ⚠WARNING: The cart **appears** to not have enough time to properly load both emulator and ROM if you skip the BIOS. It's better to leave that kernel option "Boot games through BIOS" as 1 (on).
 
 ## Planned features
-- NES/Famicom emulation ~ possibly via PocketNES
+- PCEAdvance support
+- NGPGBA
+- WasabiGBA
 
 ## Links / Binaries
 [GBATemp Bleeding-edge kernel thread](https://gbatemp.net/threads/scfw-bleeding-edge-modular-kernel-branch.656629/)
