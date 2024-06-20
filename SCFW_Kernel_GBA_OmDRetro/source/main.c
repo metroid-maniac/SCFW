@@ -101,6 +101,16 @@ struct settings settings = {
 	.cold_boot_save = 1
 };
 
+struct pcea_h {
+	char name[32];
+	u32 filesize;
+	u32 flags;
+	u32 follow;
+	u32 f_address;
+	u32 id;
+	char unk[12];
+};
+
 struct pnes_h {
 	char name[32];
 	u32 filesize;
@@ -147,6 +157,8 @@ bool filter_game(struct dirent *dirent) {
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
 		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".pce"))
+		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".sms"))
 		return true;
 	if (namelen > 3 && !strcasecmp(dirent->d_name + namelen - 3, ".gb"))
@@ -166,6 +178,8 @@ bool filter_selectable(struct dirent *dirent) {
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gbc"))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".nes"))
+		return true;
+	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".pce"))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".sms"))
 		return true;
@@ -646,6 +660,76 @@ void selectFile(char *path) {
 			fclose(emu);
 			L_Seq(path);
 		}
+	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".pce")){
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
+		FILE *emu = fopen("/scfw/pcea.gba", "rb");
+		if (!emu) {
+			iprintf("NEC PC Engine/TurboGrafx-16 emu not found!\n");
+			do {
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!(pressed & KEY_A));
+		} else {
+			fseek(emu,0,SEEK_END);
+			romsize = ftell(emu);
+			romSize = romsize;
+			fseek(emu, 0, SEEK_SET);
+			iprintf("Loading PCEAdvance\n\n");
+			FlashROM(path,pathlen,emu,romSize,false);
+			struct pcea_h header;
+			char bname_b[32];
+			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+			bname_b[sizeof(bname_b) - 1] = '\0'; 
+			strcpy(header.name, bname_b);
+			FILE *rom = fopen(path, "rb");
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			header.filesize = 0;
+			header.filesize = romsize;
+			header.flags = 0;
+			iprintf("Analyzing ROM...\n\n");
+			if (strcasestr(basename(path), "(J)") || strcasestr(basename(path), "(JAPAN)")) {
+				header.flags |= (0 << 0);
+				header.flags |= (0 << 1);
+				header.flags |= (0 << 2);
+				header.flags |= (0 << 5);
+				iprintf("Japan ROM\n\n");
+			} else {
+				header.flags |= (0 << 0);
+				header.flags |= (0 << 1);
+				header.flags |= (1 << 2);
+				header.flags |= (0 << 5);
+				iprintf("USA ROM\n\n");
+			}
+			header.follow = 0;
+			header.f_address = 0;
+			header.id = u32conv("SEN") | (0x1A << 24);
+			header.unk[0] = '@';
+			for (int i = 1; i < 12; ++i) {
+				header.unk[i] = ' ';
+			}
+			FILE *out_h = fopen("/scfw/pcea_h.dat", "wb");
+			fwrite(&header,1, sizeof header, out_h);
+			fclose(out_h);
+			out_h = fopen("/scfw/pcea_h.dat", "rb");
+			fseek(out_h,0,SEEK_END);
+			romsize = ftell(out_h);
+			romSize += romsize;
+			fseek(out_h, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_h,romSize,false);
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			romSize += romsize;
+			fseek(rom, 0, SEEK_SET);
+			iprintf("Loading ROM:\n\n");
+			FlashROM(path,pathlen,rom,romSize,true);
+			fclose(rom);
+			fclose(out_h);
+			fclose(emu);
+			L_Seq(path);
+		}
 	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".sms")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gg")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".sg"))){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
@@ -745,7 +829,7 @@ void selectFile(char *path) {
 void change_settings(char *path) {
 	for (int cursor = 0;;) {
 		iprintf("\x1b[2J"
-		        "SCFW Kernel v0.5.2-SMSAdv GBA-mode\n\n");
+		        "SCFW Kernel v0.5.2-PCEAdv GBA-mode\n\n");
 		
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
@@ -821,7 +905,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.5.2-SMSAdv GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.5.2-PCEAdv GBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
 	if (overclock_ewram())
