@@ -29,6 +29,7 @@ You should find the ff. files within the scfw folder:
 - gbc.gba
 - nes.gba
 - smsa.gba
+- pcea.gba
 
 ## Differences between this and the main kernel:
 - PCEAdvance support ✅
