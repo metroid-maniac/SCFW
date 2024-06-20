@@ -19,6 +19,9 @@ For NES/Famicom, you need to download your preferred PocketNES fork/binary and r
 For Sega Master System, Game Gear, and Sega Game 1000 (Sega 1000), you need to download your preferred SMSAdvance fork/binary and rename it to:
 - smsa.gba
 
+For NEC PC-Engine/TurboGrafx-16, you need to download your preferred PCEAdvance fork/binary and rename it to:
+- pcea.gba
+
 Once you have those files, transfer these to the scfw folder.
 You should find the ff. files within the scfw folder:
 - kernel.gba
@@ -28,6 +31,8 @@ You should find the ff. files within the scfw folder:
 - smsa.gba
 
 ## Differences between this and the main kernel:
+- PCEAdvance support ✅
+	- Loads PC-Engine/TurboGrafx-16 games (*.pce)
 - SMSAdvance support ✅
     - Loads Sega Master System games (*.sms)
 	- Loads Game Gear games (*.gg)
@@ -52,7 +57,6 @@ You should find the ff. files within the scfw folder:
 - ⚠WARNING: The cart **appears** to not have enough time to properly load both emulator and ROM if you skip the BIOS. It's better to leave that kernel option "Boot games through BIOS" as 1 (on).
 
 ## Planned features
-- PCEAdvance support
 - NGPGBA
 - WasabiGBA
 
