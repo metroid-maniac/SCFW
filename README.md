@@ -3,7 +3,7 @@
 This branch is primarily for those who'd like to test out/play with new revisions of the kernel that have yet to be pushed to the main branch.
 
 ## Installation
-1 - Download the zip file and extract the contents to the root directory of the sdcard.
+1 - Download the zip file and extract the contents to the root directory of the sdcard.  
 2 - This should replace the existing kernel.gba along with adding multiple emulator support.
 
 ## Prerequisites for emulator use
@@ -28,8 +28,13 @@ For Watara/Quickshot Supervision, you need to download your preferred WasabiGBA 
 For Neo Geo Pocket / Color, you need to download your preferred NGPGBA fork/binary and rename it to:
 - ngp.gba
 
+For Home Video Computer Advance, builds require additional work - but after doing so you can rename the binary to:
+- hvca.gba
+    * The base.bin file of hvca requires gbafix and an addiontal step:
+        * Like retail games, this emulator tries to increase the ROM speed which supercard is not compatible with, I just disabled that - Metroid Maniac
+
 Once you have those files, transfer these to the scfw folder.
-You should find the ff. files within the scfw folder:
+You should find the ff. within the scfw folder:
 - gb.gba
 - gbc.gba
 - kernel.gba
@@ -38,6 +43,9 @@ You should find the ff. files within the scfw folder:
 - pcea.gba
 - smsa.gba
 - wsv.gba
+- hvca.gba (Custom built version by metroid-maniac)
+- ./hvca/ (folder)
+- ./hvca/mapr/ (folder)
 
 ## Differences between this and the main kernel:
 - Goomba support ✅
