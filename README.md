@@ -31,7 +31,7 @@ For Neo Geo Pocket / Color, you need to download your preferred NGPGBA fork/bina
 For Home Video Computer Advance, builds require additional work - but after doing so you can rename the binary to:
 - hvca.gba
     * The base.bin file of hvca requires gbafix and an addiontal step:
-        * Like retail games, this emulator tries to increase the ROM speed which supercard is not compatible with, I just disabled that - Metroid Maniac
+        * _"Like retail games, this emulator tries to increase the ROM speed which supercard is not compatible with, I just disabled that"_ - Metroid Maniac
 
 Once you have those files, transfer these to the scfw folder.
 You should find the ff. within the scfw folder:
@@ -65,6 +65,9 @@ You should find the ff. within the scfw folder:
 - NGPGBA support ✅
     - Loads Neo Geo Pocket games (*.ngp)
 	- Loads Neo Geo Pocket Color games (*.ngc)
+- HVCA support ✅
+    - Loads Famicom Disk System games (*.fds)
+	- Plays Nintendo Sound Files (*.nsf)
 	 
 ## Observations
 - ✅ Stable on:
@@ -77,9 +80,6 @@ You should find the ff. within the scfw folder:
 - ⚠Some GBAOAC devices such as the EXEQ Game Box SP don't play nice with flash carts as it doesn't have the same wait time. Thus, ROMs boot faster and the flash cart does not have enough time to prepare. Try to toggle "Boot games through BIOS" each time you exit a GBC/GB game.
     - Alternative method for GBAOC devices: Create a ROM compilation using "goombafront" and sideload the gba file. This process is tedious, but it works best for clones like these.
 - ⚠WARNING: The cart **appears** to not have enough time to properly load both emulator and ROM if you skip the BIOS. It's better to leave that kernel option "Boot games through BIOS" as 1 (on).
-
-## Planned features
-- None so far 😁
 
 ## Links / Binaries
 [GBATemp Bleeding-edge kernel thread](https://gbatemp.net/threads/scfw-bleeding-edge-modular-kernel-branch.656629/)
