@@ -101,6 +101,13 @@ struct settings settings = {
 	.cold_boot_save = 1
 };
 
+struct hvca_h{
+	long id; //long magic equivalent to HEX 70 41 17 04
+	char filename[32]; 
+	char ext[4];
+	long filesize;
+};
+
 struct ngp_h{
 	u32 id; //NGP,0x1A
 	u32 filesize;
@@ -167,6 +174,8 @@ bool filter_game(struct dirent *dirent) {
 	if (dirent->d_type == DT_DIR)
 		return true;
 	u32 namelen = strlen(dirent->d_name);
+	if (namelen > 4 && (!strcasecmp(dirent->d_name + namelen - 4, ".fds") || !strcasecmp(dirent->d_name + namelen - 4, ".nsf")))
+		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gbc"))
@@ -193,6 +202,8 @@ bool filter_selectable(struct dirent *dirent) {
 	if (dirent->d_type == DT_DIR)
 		return true;
 	u32 namelen = strlen(dirent->d_name);
+	if (namelen > 4 && (!strcasecmp(dirent->d_name + namelen - 4, ".fds") || !strcasecmp(dirent->d_name + namelen - 4, ".nsf")))
+		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gba"))
 		return true;
 	if (namelen > 4 && !strcasecmp(dirent->d_name + namelen - 4, ".gbc"))
@@ -377,6 +388,41 @@ u32 u32conv(const char* text) {
         result |= (u32)text[i]; // OR with ASCII value
     }
     return result;
+}
+
+void hvca_f(char path[], struct hvca_h *head, const char *out) {
+    head->id = 0x04174170;
+    char *dir_sep = strrchr(path, '/');
+
+    if (dir_sep == NULL) {
+        dir_sep = path;
+    } else {
+        dir_sep++;
+    }
+
+    char *f_end = strrchr(dir_sep, '.');
+    if (f_end == NULL) {
+        iprintf("ERROR: NO EXTENSION FOUND\n");
+        return;
+    }
+
+    strncpy(head->filename, dir_sep, f_end - dir_sep);
+    head->filename[f_end - dir_sep] = '\0';  // Null terminate
+
+    strcpy(head->ext, f_end + 1);
+
+    FILE *input_file = fopen(path, "rb");
+
+    FILE *o_file = fopen(out, "wb");
+	
+    fseek(input_file, 0, SEEK_END);
+    head->filesize = ftell(input_file);
+    rewind(input_file);
+
+	fwrite(head, 1, sizeof(*head), o_file);
+	fclose(o_file);
+    fclose(input_file);
+
 }
 
 char *basename(char *path)
@@ -591,6 +637,149 @@ void selectFile(char *path) {
 			else if (pressed & KEY_R) {
 				saveSram(path);
 			}
+		}
+	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".fds")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".nsf"))){
+		u32 romsize = 0;
+		total_bytes = 0,bytes = 0;
+		FILE *emu = fopen("/scfw/hvca.gba", "rb");
+		if (!emu) {
+			iprintf("FDS emu / NSF player not found!\n");
+			do {
+				scanKeys();
+				pressed = keysDownRepeat();
+				VBlankIntrWait();
+			} while (!(pressed & KEY_A));
+		} else {
+			fseek(emu,0,SEEK_END);
+			romsize = ftell(emu);
+			romSize = romsize;
+			fseek(emu, 0, SEEK_SET);
+			iprintf("Loading HVCA\n\n");
+			FlashROM(path,pathlen,emu,romSize,false);
+			struct hvca_h head;
+			char hvca_deps[64];
+			//First file
+			strcpy(hvca_deps,"/scfw/hvca/font_a.raw");
+			const char *output_path = "/scfw/hvca/hvca_0.dat";
+			iprintf("... PLEASE WAIT ...\n\n");
+			hvca_f(hvca_deps, &head, output_path);
+			FILE *out_f0 = fopen("/scfw/hvca/hvca_0.dat", "rb");
+			fseek(out_f0,0,SEEK_END);
+			romsize = ftell(out_f0);
+			romSize += romsize;
+			fseek(out_f0, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f0,romSize,false);
+			FILE *out_f1 = fopen("/scfw/hvca/font_a.raw", "rb");
+			fseek(out_f1, 0, SEEK_END);
+			romsize = ftell(out_f1);
+			romSize += romsize;
+			fseek(out_f1, 0, SEEK_SET);
+			iprintf("Loading HVCA dependency:\n\n");
+			FlashROM(path,pathlen,out_f1,romSize,false);
+			//Second file
+			strcpy(hvca_deps,"/scfw/hvca/font_k.raw");
+			output_path = "/scfw/hvca/hvca_1.dat";
+			hvca_f(hvca_deps, &head, output_path);
+			FILE *out_f2 = fopen("/scfw/hvca/hvca_1.dat", "rb");
+			fseek(out_f2,0,SEEK_END);
+			romsize = ftell(out_f2);
+			romSize += romsize;
+			fseek(out_f2, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f2,romSize,false);
+			FILE *out_f3 = fopen("/scfw/hvca/font_k.raw", "rb");
+			fseek(out_f3, 0, SEEK_END);
+			romsize = ftell(out_f3);
+			romSize += romsize;
+			fseek(out_f3, 0, SEEK_SET);
+			iprintf("Loading HVCA dependency:\n\n");
+			FlashROM(path,pathlen,out_f3,romSize,false);
+			//Third file
+			if(!strcasecmp(path + pathlen - 4, ".nsf"))
+				strcpy(hvca_deps,"/scfw/hvca/mapr/mnsf.bin");
+			else
+				strcpy(hvca_deps,"/scfw/hvca/mapr/mfds.bin");
+			output_path = "/scfw/hvca/hvca_2.dat";
+			hvca_f(hvca_deps, &head, output_path);
+			FILE *out_f4 = fopen("/scfw/hvca/hvca_2.dat", "rb");
+			fseek(out_f4,0,SEEK_END);
+			romsize = ftell(out_f4);
+			romSize += romsize;
+			fseek(out_f4, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f4,romSize,false);
+			FILE *out_f5;
+			if(!strcasecmp(path + pathlen - 4, ".nsf"))
+				out_f5 = fopen("/scfw/hvca/mapr/mnsf.bin", "rb");
+			else
+				out_f5 = fopen("/scfw/hvca/mapr/mfds.bin", "rb");
+			fseek(out_f5, 0, SEEK_END);
+			romsize = ftell(out_f5);
+			romSize += romsize;
+			fseek(out_f5, 0, SEEK_SET);
+			iprintf("Loading HVCA dependency:\n\n");
+			FlashROM(path,pathlen,out_f5,romSize,false);
+			//Fourth file
+			strcpy(hvca_deps,"/scfw/hvca/disksys.rom");
+			output_path = "/scfw/hvca/hvca_3.dat";
+			hvca_f(hvca_deps, &head, output_path);
+			FILE *out_f6 = fopen("/scfw/hvca/hvca_3.dat", "rb");
+			fseek(out_f6,0,SEEK_END);
+			romsize = ftell(out_f6);
+			romSize += romsize;
+			fseek(out_f6, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f6,romSize,false);
+			FILE *out_f7 = fopen("/scfw/hvca/disksys.rom", "rb");
+			fseek(out_f7, 0, SEEK_END);
+			romsize = ftell(out_f7);
+			romSize += romsize;
+			fseek(out_f7, 0, SEEK_SET);
+			iprintf("Loading HVCA dependency:\n\n");
+			FlashROM(path,pathlen,out_f7,romSize,false);
+			//Fifth file (FDS ROM!)
+			strcpy(hvca_deps,path);
+			output_path = "/scfw/hvca/hvca_4.dat";
+			hvca_f(hvca_deps, &head, output_path);
+			FILE *out_f8 = fopen("/scfw/hvca/hvca_4.dat", "rb");
+			fseek(out_f8,0,SEEK_END);
+			romsize = ftell(out_f8);
+			romSize += romsize;
+			fseek(out_f8, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f8,romSize,false);
+			FILE *rom = fopen(path, "rb");
+			fseek(rom, 0, SEEK_END);
+			romsize = ftell(rom);
+			romSize += romsize;
+			fseek(rom, 0, SEEK_SET);
+			iprintf("Loading ROM:\n\n");
+			FlashROM(path,pathlen,rom,romSize,false);
+			// Write end of emu
+			struct hvca_h head0;
+			head0.id = 0x41700417;
+			head0.filename[0] = 0;
+			head0.ext[0] = 0;
+			head0.filesize = 0;
+			FILE *out_f9 = fopen("/scfw/hvca/hvca_5.dat", "wb");
+			fwrite(&head0,1, sizeof head0, out_f9);
+			fclose(out_f9);
+			out_f9 = fopen("/scfw/hvca/hvca_5.dat", "rb");
+			fseek(out_f9, 0, SEEK_END);
+			romsize = ftell(out_f9);
+			romSize += romsize;
+			fseek(out_f9, 0, SEEK_SET);
+			iprintf("Loading HVCA dependency:\n\n");
+			FlashROM(path,pathlen,out_f9,romSize,true); //Close after the last rom
+			fclose(out_f9);
+			fclose(out_f8);
+			fclose(out_f7);
+			fclose(out_f6);
+			fclose(out_f5);
+			fclose(out_f4);
+			fclose(out_f3);
+			fclose(out_f2);
+			fclose(out_f1);
+			fclose(out_f0);
+			fclose(emu);
+			fclose(rom);
+			L_Seq(path);
 		}
 	} else if ((pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gb")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gbc")) ){
 		u32 romsize = 0;
@@ -985,7 +1174,7 @@ void selectFile(char *path) {
 void change_settings(char *path) {
 	for (int cursor = 0;;) {
 		iprintf("\x1b[2J"
-		        "SCFW Kernel v0.5.2-NeoGeo GBA-mode\n\n");
+		        "SCFW Kernel v0.5.2-HVCA \nGBA-mode\n\n");
 		
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
@@ -1032,7 +1221,7 @@ void change_settings(char *path) {
 		}
 		if (pressed & KEY_DOWN) {
 			++cursor;
-			if (cursor >= 7)
+			if (cursor > 5)
 				cursor -= 6;
 		}
 	}
@@ -1061,7 +1250,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.5.2-NeoGeo GBA-mode\n\n");
+	iprintf("SCFW Kernel v0.5.2-HVCA \nGBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
 	if (overclock_ewram())
