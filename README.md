@@ -4,7 +4,8 @@ This branch is primarily for those who'd like to test out/play with new revision
 
 ## Installation
 1 - Download the zip file and extract the contents to the root directory of the sdcard.  
-2 - This should replace the existing kernel.gba along with adding multiple emulator support.
+2 - This should replace the existing kernel.gba along with adding multiple emulator support.  
+> **_NOTE:_** You can also select the firmware.frm file from within the kernel to flash SCFW to the Supercard's firmware. Because the firmware is minimal and the kernel is loaded from the SD card, updates to the firmware should be rare. You can enjoy kernel updates without updating the firmware.  
 
 ## Prerequisites for emulator use
 For Game Boy / Game Boy Color, you need to download your preferred Goomba fork/binary and rename it to:
@@ -60,11 +61,14 @@ You should find the ff. within the scfw folder:
 	- Loads Game Gear games (*.gg)
 	- Loads Sega Game 1000 / Sega 1000 games (*.sg)
     - Loads Sega Master System games (*.sms)
+	- Custom BIOS loading support. Can be toggled within kernel settings
 - WasabiGBA support ✅
     - Loads Watara/Quickshot Supervision games (*.sv)
+	- Custom BIOS loading support. Can be toggled within kernel settings
 - NGPGBA support ✅
     - Loads Neo Geo Pocket games (*.ngp)
 	- Loads Neo Geo Pocket Color games (*.ngc)
+	- Custom BIOS loading support. Can be toggled within kernel settings
 - HVCA support ✅
     - Loads Famicom Disk System games (*.fds)
 	- Plays Nintendo Sound Files (*.nsf)
@@ -78,7 +82,7 @@ You should find the ff. within the scfw folder:
 	
 ##NOTES
 - ⚠Some GBAOAC devices such as the EXEQ Game Box SP don't play nice with flash carts as it doesn't have the same wait time. Thus, ROMs boot faster and the flash cart does not have enough time to prepare. Try to toggle "Boot games through BIOS" each time you exit a GBC/GB game.
-    - Alternative method for GBAOC devices: Create a ROM compilation using "goombafront" and sideload the gba file. This process is tedious, but it works best for clones like these.
+    - Alternative method for GBAOC devices: Create a ROM compilation and sideload the resulting gba file. This process is tedious, but it works best for clones like these.
 - ⚠WARNING: The cart **appears** to not have enough time to properly load both emulator and ROM if you skip the BIOS. It's better to leave that kernel option "Boot games through BIOS" as 1 (on).
 
 ## Links / Binaries
@@ -86,4 +90,7 @@ You should find the ff. within the scfw folder:
 
 ## Credits
 [metroid maniac](https://github.com/metroid-maniac) - Main developer  
-[OmDRetro](https://github.com/OmDRetro) - Kernel enhancements
+[Archeychen](https://github.com/ArcheyChen) - Early development into another loader, SDHC support  
+[OmDRetro](https://github.com/OmDRetro) - Kernel enhancements, significantly more supported filetypes  
+[RocketRobz](https://github.com/RocketRobz) - Twilightmenu++ "gbapatcher" code for patching Supercard ROMs  
+[SiliconExarch](https://github.com/SiliconExarch) - Finding an old DevkitARM release with a functioning Supercard SD drive  
