@@ -7,7 +7,7 @@
 #include <limits.h>
 #include <dirent.h>
 #include <errno.h>
-
+#include <time.h> //For PseudoRTC
 #include "Save.h"
 #include "WhiteScreenPatch.h"
 
@@ -89,6 +89,9 @@ struct settings {
 	int biosboot;
 	int soft_reset_patch;
 	int cold_boot_save;
+	int smsa_bios;
+	int wsv_bios;
+	int ngp_bios;
 };
 struct settings settings = {
 	.autosave = 1,
@@ -98,7 +101,10 @@ struct settings settings = {
 	.sort = SORT_NONE,
 	.biosboot = 1,
 	.soft_reset_patch = 1,
-	.cold_boot_save = 1
+	.cold_boot_save = 1,
+	.smsa_bios = 0,
+	.wsv_bios = 0,
+	.ngp_bios = 0
 };
 
 struct hvca_h{
@@ -390,6 +396,17 @@ u32 u32conv(const char* text) {
     return result;
 }
 
+void u_prompt(char *i)
+{
+	if(sizeof(i) > 0)
+		printf(i);
+	do {
+		scanKeys();
+		pressed = keysDownRepeat();
+		VBlankIntrWait();
+	} while (!(pressed & KEY_A));
+}
+
 void hvca_f(char path[], struct hvca_h *head, const char *out) {
     head->id = 0x04174170;
     char *dir_sep = strrchr(path, '/');
@@ -402,7 +419,7 @@ void hvca_f(char path[], struct hvca_h *head, const char *out) {
 
     char *f_end = strrchr(dir_sep, '.');
     if (f_end == NULL) {
-        iprintf("ERROR: NO EXTENSION FOUND\n");
+        iprintf("ERROR: NO EXTENSION FOUND\n\n");
         return;
     }
 
@@ -415,15 +432,23 @@ void hvca_f(char path[], struct hvca_h *head, const char *out) {
 
     FILE *o_file = fopen(out, "wb");
 	
-    fseek(input_file, 0, SEEK_END);
-    head->filesize = ftell(input_file);
-    rewind(input_file);
-
-	fwrite(head, 1, sizeof(*head), o_file);
-	fclose(o_file);
-    fclose(input_file);
-
+	if(!input_file) {
+		fclose(input_file);
+		fclose(o_file);
+		iprintf("\nUnable to find: \n %s \n\n", path);
+		u_prompt("ERROR: MISSING DEPENDENCY\n\nPress A to acknowledge");
+		tryAgain();
+	} else {
+		//
+        fseek(input_file, 0, SEEK_END);
+        head->filesize = ftell(input_file);
+        rewind(input_file);
+		fwrite(head, 1, sizeof(*head), o_file);
+		fclose(input_file);
+		fclose(o_file);
+	}
 }
+
 
 char *basename(char *path)
 {
@@ -487,6 +512,128 @@ void FlashROM(char *path, u32 pathlen, FILE *rom, u32 romsize, bool F_EOL){
 		
 		if (settings.soft_reset_patch)
 			resetPatch(romSize);
+	}
+}
+
+void smsa_f(char path[], struct smsa_h *head, const char *out) {
+	head->id = u32conv("SMS") | (0x1A << 24);
+
+    FILE *i_file = fopen(path, "rb");
+    FILE *o_file = fopen(out, "wb");
+	
+	if(!i_file) {
+		fclose(i_file);
+		fclose(o_file);
+		iprintf("\nUnable to find: \n %s \n\n", path);
+		u_prompt("ERROR: MISSING DEPENDENCY\n\nPress A to acknowledge");
+		tryAgain();
+	} else {
+        fseek(i_file, 0, SEEK_END);
+        head->filesize = ftell(i_file);
+        rewind(i_file);
+		head->flags = 0;
+		iprintf("Analyzing...\n");
+		head->hacks = 0;
+		head->follow = 0;
+		head->B_flag = 0;
+		if (strcasestr(basename(path), "[BIOS]")) {
+			head->B_flag |= (1 << 0);
+			iprintf("BIOS detected\n");
+		}
+		else
+		{
+			head->B_flag |= (0 << 0);
+		}
+		head->res0 = 0;
+		head->res1 = 0;
+		head->res2 = 0;
+		char bname_b[32];
+		strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+		bname_b[sizeof(bname_b) - 1] = '\0'; 
+		strcpy(head->name, bname_b);
+		fwrite(head, 1, sizeof(*head), o_file);
+		fclose(i_file);
+		fclose(o_file);
+	}
+}
+
+void wsv_f(char path[], struct wsv_h *head, const char *out) {
+	head->id = u32conv("VSW") | (0x1A << 24);
+
+    FILE *i_file = fopen(path, "rb");
+    FILE *o_file = fopen(out, "wb");
+	
+	if(!i_file) {
+		fclose(i_file);
+		fclose(o_file);
+		iprintf("\nUnable to find: \n %s \n\n", path);
+		u_prompt("ERROR: MISSING DEPENDENCY\n\nPress A to acknowledge");
+		tryAgain();
+	} else {
+        fseek(i_file, 0, SEEK_END);
+        head->filesize = ftell(i_file);
+        rewind(i_file);
+		head->flags = 0;
+		iprintf("Analyzing...\n");
+		head->follow = 0;
+		head->bios = 0;
+		if (strcasestr(basename(path), "[BIOS]")) {
+			head->bios |= (1 << 0);
+			iprintf("BIOS detected\n");
+		}
+		else
+		{
+			head->bios |= (0 << 0);
+		}
+		head->res[0] = 0;
+		char bname_b[32];
+		strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+		bname_b[sizeof(bname_b) - 1] = '\0'; 
+		strcpy(head->name, bname_b);
+		fwrite(head, 1, sizeof(*head), o_file);
+		fclose(i_file);
+		fclose(o_file);
+	}
+}
+
+void ngp_f(char path[], struct ngp_h *head, const char *out) {
+	head->id = u32conv("PGN") | (0x1A << 24);
+	
+    FILE *i_file = fopen(path, "rb");
+    FILE *o_file = fopen(out, "wb");
+	
+	if(!i_file) {
+		fclose(i_file);
+		fclose(o_file);
+		iprintf("\nUnable to find: \n %s \n\n", path);
+		u_prompt("ERROR: MISSING DEPENDENCY\n\nPress A to acknowledge");
+		tryAgain();
+	} else {
+        fseek(i_file, 0, SEEK_END);
+        head->filesize = ftell(i_file);
+        rewind(i_file);
+		head->flags = 0;
+		iprintf("Analyzing...\n");
+		head->follow = 0;
+		head->bios = 0;
+		if (strcasestr(basename(path), "[BIOS]")) {
+			head->bios |= (1 << 0);
+			iprintf("BIOS detected\n");
+		}
+		else
+		{
+			head->bios |= (0 << 0);
+		}
+		head->res0 = 0;
+		head->res1 = 0;
+		head->res2 = 0;
+		char bname_b[32];
+		strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
+		bname_b[sizeof(bname_b) - 1] = '\0'; 
+		strcpy(head->name, bname_b);
+		fwrite(head, 1, sizeof(*head), o_file);
+		fclose(i_file);
+		fclose(o_file);
 	}
 }
 
@@ -641,14 +788,12 @@ void selectFile(char *path) {
 	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".fds")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".nsf"))){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/hvca.gba", "rb");
+		const char *emu_bin = "/scfw/hvca.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("FDS emu / NSF player not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No HVCA found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -784,18 +929,16 @@ void selectFile(char *path) {
 	} else if ((pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gb")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".gbc")) ){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu;
+		const char *emu_bin;
 		if (!strcasecmp(path + pathlen - 3, ".gb"))
-			emu = fopen("/scfw/gb.gba", "rb");
+			emu_bin = "/scfw/gb.gba";
 		else
-			emu = fopen("/scfw/gbc.gba", "rb");
+			emu_bin = "/scfw/gbc.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("GB/GBC emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No Goomba found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -817,14 +960,12 @@ void selectFile(char *path) {
 	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".nes")){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/nes.gba", "rb");
+		const char *emu_bin = "/scfw/nes.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("NES emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No PocketNES found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -876,14 +1017,12 @@ void selectFile(char *path) {
 	} else if (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".pce")){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/pcea.gba", "rb");
+		const char *emu_bin = "/scfw/pcea.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("PCE emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No PCEAdvance found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -946,14 +1085,12 @@ void selectFile(char *path) {
 	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".sms")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".gg")) || (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".sg"))){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/smsa.gba", "rb");
+		const char *emu_bin = "/scfw/smsa.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("SMS/GG/SG-1000 emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No SMSAdvance found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -961,58 +1098,75 @@ void selectFile(char *path) {
 			fseek(emu, 0, SEEK_SET);
 			iprintf("Loading SMSAdvance\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
-			struct smsa_h header;
-			header.id = u32conv("SMS") | (0x1A << 24);
+			struct smsa_h head;
+			char smsa_deps[64];
+			const char *output_path;
+			FILE *out_f0, *out_f1;
+			if (settings.smsa_bios) {
+				if (!strcasecmp(path + pathlen - 4, ".sms"))
+					strcpy(smsa_deps,"/scfw/[BIOS]smsa_sms.rom");
+				if (!strcasecmp(path + pathlen - 3, ".sg"))
+					strcpy(smsa_deps,"/scfw/[BIOS]smsa_sg.rom");
+				if (!strcasecmp(path + pathlen - 3, ".gg"))
+					strcpy(smsa_deps,"/scfw/[BIOS]smsa_gg.rom");
+				output_path = "/scfw/smsa_0.dat";
+				iprintf("... PLEASE WAIT ...\n\n");
+				smsa_f(smsa_deps, &head, output_path);
+				out_f0 = fopen(output_path, "rb");
+				fseek(out_f0,0,SEEK_END);
+				romsize = ftell(out_f0);
+				romSize += romsize;
+				fseek(out_f0, 0, SEEK_SET);
+				FlashROM(path,pathlen,out_f0,romSize,false);
+				out_f1 = fopen(smsa_deps, "rb");
+				fseek(out_f1, 0, SEEK_END);
+				romsize = ftell(out_f1);
+				romSize += romsize;
+				fseek(out_f1, 0, SEEK_SET);
+				iprintf("Loading SMSA BIOS:\n\n");
+				FlashROM(path,pathlen,out_f1,romSize,false);
+			}
+			//Flash SMSA ROM
+			head.id = u32conv("SMS") | (0x1A << 24);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
 			romsize = ftell(rom);
-			header.filesize = 0;
-			header.filesize = romsize;
-			header.flags = 0;
+			head.filesize = 0;
+			head.filesize = romsize;
+			head.flags = 0;
 			iprintf("Analyzing ROM...\n\n");
 			if (strcasestr(basename(path), "(E)") || strcasestr(basename(path), "(EUR)") || strcasestr(basename(path), "(Europe)")) {
-				header.flags |= (1 << 0);
+				head.flags |= (1 << 0);
 				iprintf("PAL timing\n\n");
 			} else {
-				header.flags |= (0 << 0);
+				head.flags |= (0 << 0);
 				iprintf("NTSC timing\n\n");
 			}
 			if (strcasestr(basename(path), "(J)") || strcasestr(basename(path), "(JAPAN)")) {
-				header.flags |= (1 << 1);
+				head.flags |= (1 << 1);
 				iprintf("Japan ROM\n\n");
 			} else {
-				header.flags |= (0 << 1);
+				head.flags |= (0 << 1);
 				iprintf("USA/EUR ROM\n\n");
 			}
 			if(!strcasecmp(path + pathlen - 4, ".sms") || !strcasecmp(path + pathlen - 3, ".sg"))
-				header.flags |= (0 << 2);
+				head.flags |= (0 << 2);
 			else
-				header.flags |= (1 << 2);
-			header.hacks = 0;
-			header.follow = 0;
-			header.B_flag = 0;
-			/*
-			if (strcasestr(basename(path), "[BIOS]")) {
-				header.B_flag |= (1 << 0);
-				iprintf("BIOS ROM detected\n\n");
-			}
-			else
-			{
-				header.B_flag |= (0 << 0);
-				iprintf("Non-BIOS ROM\n\n");
-			}
-			*/
-			header.res0 = 0;
-			header.res1 = 0;
-			header.res2 = 0;
+				head.flags |= (1 << 2);
+			head.hacks = 0;
+			head.follow = 0;
+			head.B_flag = 0;
+			head.res0 = 0;
+			head.res1 = 0;
+			head.res2 = 0;
 			char bname_b[32];
 			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
 			bname_b[sizeof(bname_b) - 1] = '\0'; 
-			strcpy(header.name, bname_b);
-			FILE *out_h = fopen("/scfw/smsa_h.dat", "wb");
-			fwrite(&header,1, sizeof header, out_h);
+			strcpy(head.name, bname_b);
+			FILE *out_h = fopen("/scfw/smsa_1.dat", "wb");
+			fwrite(&head,1, sizeof head, out_h);
 			fclose(out_h);
-			out_h = fopen("/scfw/smsa_h.dat", "rb");
+			out_h = fopen("/scfw/smsa_1.dat", "rb");
 			fseek(out_h,0,SEEK_END);
 			romsize = ftell(out_h);
 			romSize += romsize;
@@ -1026,20 +1180,20 @@ void selectFile(char *path) {
 			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
 			fclose(out_h);
+			fclose(out_f1);
+			fclose(out_f0);
 			fclose(emu);
 			L_Seq(path);
 		}
 	} else if (pathlen > 3 && !strcasecmp(path + pathlen - 3, ".sv")){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/wsv.gba", "rb");
+		const char *emu_bin = "/scfw/wsv.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("WSV emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No WasabiGBA found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -1047,40 +1201,54 @@ void selectFile(char *path) {
 			fseek(emu, 0, SEEK_SET);
 			iprintf("Loading WasabiGBA\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
-			struct wsv_h header;
-			header.id = u32conv("VSW") | (0x1A << 24);
+			struct wsv_h head;
+			char wsv_deps[64];
+			const char *output_path;
+			FILE *out_f0, *out_f1;
+			if (settings.wsv_bios) {
+				if (!strcasecmp(path + pathlen - 3, ".sv"))
+					strcpy(wsv_deps,"/scfw/[BIOS]wsv.rom");
+				output_path = "/scfw/wsv_0.dat";
+				iprintf("... PLEASE WAIT ...\n\n");
+				wsv_f(wsv_deps, &head, output_path);
+				out_f0 = fopen(output_path, "rb");
+				fseek(out_f0,0,SEEK_END);
+				romsize = ftell(out_f0);
+				romSize += romsize;
+				fseek(out_f0, 0, SEEK_SET);
+				FlashROM(path,pathlen,out_f0,romSize,false);
+				out_f1 = fopen(wsv_deps, "rb");
+				fseek(out_f1, 0, SEEK_END);
+				romsize = ftell(out_f1);
+				romSize += romsize;
+				fseek(out_f1, 0, SEEK_SET);
+				iprintf("Loading WSV BIOS:\n\n");
+				FlashROM(path,pathlen,out_f1,romSize,false);
+			}
+			head.id = u32conv("VSW") | (0x1A << 24);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
 			romsize = ftell(rom);
-			header.filesize = 0;
-			header.filesize = romsize;
-			header.flags = 0;
+			head.filesize = 0;
+			head.filesize = romsize;
+			head.flags = 0;
 			iprintf("Analyzing ROM...\n\n");
-			header.follow = 0;
-			header.bios = 0;
-			if (strcasestr(basename(path), "[BIOS]")) {
-				header.bios |= (1 << 0);
-				iprintf("BIOS ROM detected\n\n");
-			}
-			else
-			{
-				header.bios |= (0 << 0);
-				iprintf("Non-BIOS ROM\n\n");
-			}
-			header.res[0] = 0;
+			head.follow = 0;
+			head.bios = 0;
+			head.res[0] = 0;
 			char bname_b[32];
 			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
 			bname_b[sizeof(bname_b) - 1] = '\0'; 
-			strcpy(header.name, bname_b);
-			FILE *out_h = fopen("/scfw/wsv_h.dat", "wb");
-			fwrite(&header,1, sizeof header, out_h);
-			fclose(out_h);
-			out_h = fopen("/scfw/wsv_h.dat", "rb");
-			fseek(out_h,0,SEEK_END);
-			romsize = ftell(out_h);
+			strcpy(head.name, bname_b);
+			FILE *out_f2 = fopen("/scfw/wsv_1.dat", "wb");
+			fwrite(&head,1, sizeof head, out_f2);
+			fclose(out_f2);
+			out_f2 = fopen("/scfw/wsv_1.dat", "rb");
+			fseek(out_f2,0,SEEK_END);
+			romsize = ftell(out_f2);
 			romSize += romsize;
-			fseek(out_h, 0, SEEK_SET);
-			FlashROM(path,pathlen,out_h,romSize,false);
+			fseek(out_f2, 0, SEEK_SET);
+			FlashROM(path,pathlen,out_f2,romSize,false);
 			fseek(rom, 0, SEEK_END);
 			romsize = ftell(rom);
 			romSize += romsize;
@@ -1088,21 +1256,21 @@ void selectFile(char *path) {
 			iprintf("Loading ROM:\n\n");
 			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
-			fclose(out_h);
+			fclose(out_f2);
+			fclose(out_f1);
+			fclose(out_f0);
 			fclose(emu);
 			L_Seq(path);
 		}
 	} else if ((pathlen > 4 && !strcasecmp(path + pathlen - 4, ".ngp")) || (pathlen > 4 && !strcasecmp(path + pathlen - 4, ".ngc"))){
 		u32 romsize = 0;
 		total_bytes = 0,bytes = 0;
-		FILE *emu = fopen("/scfw/ngp.gba", "rb");
+		const char *emu_bin = "/scfw/ngp.gba";
+		FILE *emu = fopen(emu_bin, "rb");
 		if (!emu) {
-			iprintf("NGP/NGC emu not found!\n");
-			do {
-				scanKeys();
-				pressed = keysDownRepeat();
-				VBlankIntrWait();
-			} while (!(pressed & KEY_A));
+			iprintf("Checking %s\n",emu_bin);
+			u_prompt("No NGPGBA found!\n\n");
+			fclose(emu);
 		} else {
 			fseek(emu,0,SEEK_END);
 			romsize = ftell(emu);
@@ -1110,41 +1278,59 @@ void selectFile(char *path) {
 			fseek(emu, 0, SEEK_SET);
 			iprintf("Loading NGPGBA\n\n");
 			FlashROM(path,pathlen,emu,romSize,false);
-			struct ngp_h header;
-			header.id = u32conv("PGN") | (0x1A << 24);
+			struct ngp_h head;
+			//
+			char ngp_deps[64];
+			const char *output_path;
+			FILE *out_f0, *out_f1;
+			if (settings.ngp_bios) {
+				if (!strcasecmp(path + pathlen - 4, ".ngc"))
+					strcpy(ngp_deps,"/scfw/[BIOS]ngp_color.rom");
+				if (!strcasecmp(path + pathlen - 4, ".ngp"))
+					strcpy(ngp_deps,"/scfw/[BIOS]ngp_og.rom");
+				output_path = "/scfw/ngpgba_0.dat";
+				iprintf("... PLEASE WAIT ...\n\n");
+				ngp_f(ngp_deps, &head, output_path);
+				out_f0 = fopen(output_path, "rb");
+				fseek(out_f0,0,SEEK_END);
+				romsize = ftell(out_f0);
+				romSize += romsize;
+				fseek(out_f0, 0, SEEK_SET);
+				FlashROM(path,pathlen,out_f0,romSize,false);
+				out_f1 = fopen(ngp_deps, "rb");
+				fseek(out_f1, 0, SEEK_END);
+				romsize = ftell(out_f1);
+				romSize += romsize;
+				fseek(out_f1, 0, SEEK_SET);
+				iprintf("Loading NGPGBA BIOS:\n\n");
+				FlashROM(path,pathlen,out_f1,romSize,false);
+			}
+			//BIOS FIRST THEN THIS
+			head.id = u32conv("PGN") | (0x1A << 24);
 			FILE *rom = fopen(path, "rb");
 			fseek(rom, 0, SEEK_END);
 			romsize = ftell(rom);
-			header.filesize = 0;
-			header.filesize = romsize;
-			header.flags = 0;
+			head.filesize = 0;
+			head.filesize = romsize;
+			head.flags = 0;
 			if(!strcasecmp(path + pathlen - 4, ".ngc"))
-				header.flags |= (1 << 2);
+				head.flags |= (1 << 2);
 			else
-				header.flags |= (0 << 2);
+				head.flags |= (0 << 2);
 			iprintf("Analyzing ROM...\n\n");
-			header.follow = 0;
-			header.bios = 0;
-			if (strcasestr(basename(path), "[BIOS]")) {
-				header.bios |= (1 << 0);
-				iprintf("BIOS ROM detected\n\n");
-			}
-			else
-			{
-				header.bios |= (0 << 0);
-				iprintf("Non-BIOS ROM\n\n");
-			}
-			header.res0 = 0;
-			header.res1 = 0;
-			header.res2 = 0;
+			head.follow = 0;
+			head.bios = 0;
+			head.res0 = 0;
+			head.res1 = 0;
+			head.res2 = 0;
 			char bname_b[32];
 			strncpy(bname_b, basename(path), sizeof(bname_b) - 1);
 			bname_b[sizeof(bname_b) - 1] = '\0'; 
-			strcpy(header.name, bname_b);
-			FILE *out_h = fopen("/scfw/ngp_h.dat", "wb");
-			fwrite(&header,1, sizeof header, out_h);
+			strcpy(head.name, bname_b);
+			FILE *out_h = fopen("/scfw/ngpgba_1.dat", "wb");
+			fwrite(&head,1, sizeof head, out_h);
 			fclose(out_h);
-			out_h = fopen("/scfw/ngp_h.dat", "rb");
+			out_h = fopen("/scfw/ngpgba_1.dat", "rb");
 			fseek(out_h,0,SEEK_END);
 			romsize = ftell(out_h);
 			romSize += romsize;
@@ -1158,23 +1344,20 @@ void selectFile(char *path) {
 			FlashROM(path,pathlen,rom,romSize,true);
 			fclose(rom);
 			fclose(out_h);
+			fclose(out_f1);
+			fclose(out_f0);
 			fclose(emu);
 			L_Seq(path);
 		}
 	} else {
-		iprintf("Unrecognised file extension!\n");
-		do {
-			scanKeys();
-			pressed = keysDownRepeat();
-			VBlankIntrWait();
-		} while (!(pressed & KEY_A));
+		u_prompt("Unrecognised file extension!\n");
 	}
 }
 
 void change_settings(char *path) {
 	for (int cursor = 0;;) {
 		iprintf("\x1b[2J"
-		        "SCFW Kernel v0.5.2-HVCA \nGBA-mode\n\n");
+		        "SCFW Kernel v0.5.2-HVCA-B \nGBA-mode\n\n");
 		
 		iprintf("%cAutosave: %i\n", cursor == 0 ? '>' : ' ', settings.autosave);
 		iprintf("%cSRAM Patch: %i\n", cursor == 1 ? '>' : ' ', settings.sram_patch);
@@ -1182,6 +1365,9 @@ void change_settings(char *path) {
 		iprintf("%cSoft reset Patch: %i\n", cursor == 3 ? '>' : ' ', settings.soft_reset_patch);
 		iprintf("%cBoot games through BIOS: %i\n", cursor == 4 ? '>' : ' ', settings.biosboot);
 		iprintf("%cAutosave after cold boot: %i\n", cursor == 5 ? '>' : ' ', settings.cold_boot_save);
+		iprintf("%c[SMSAdvance] Load BIOS: %i\n", cursor == 6 ? '>' : ' ', settings.smsa_bios);
+		iprintf("%c[WasabiGBA] Load BIOS: %i\n", cursor == 7 ? '>' : ' ', settings.wsv_bios);
+		iprintf("%c[NGPGBA] Load BIOS: %i\n", cursor == 8 ? '>' : ' ', settings.ngp_bios);
 		
 		do {
 			scanKeys();
@@ -1209,6 +1395,15 @@ void change_settings(char *path) {
 			case 5:
 				settings.cold_boot_save = !settings.cold_boot_save;
 				break;
+			case 6:
+				settings.smsa_bios = !settings.smsa_bios;
+				break;
+			case 7:
+				settings.wsv_bios = !settings.wsv_bios;
+				break;
+			case 8:
+				settings.ngp_bios = !settings.ngp_bios;
+				break;
 			}
 		}
 		if (pressed & KEY_B) {
@@ -1217,12 +1412,12 @@ void change_settings(char *path) {
 		if (pressed & KEY_UP) {
 			--cursor;
 			if (cursor < 0)
-				cursor += 6;
+				cursor += 9;
 		}
 		if (pressed & KEY_DOWN) {
 			++cursor;
-			if (cursor > 5)
-				cursor -= 6;
+			if (cursor > 8)
+				cursor -= 9;
 		}
 	}
 	
@@ -1250,7 +1445,7 @@ int main() {
 
 	consoleDemoInit();
 
-	iprintf("SCFW Kernel v0.5.2-HVCA \nGBA-mode\n\n");
+	iprintf("SCFW Kernel v0.5.2-HVCA-B \nGBA-mode\n\n");
 	
 	*(vu16*) 0x04000204	 = 0x40c0;
 	if (overclock_ewram())
