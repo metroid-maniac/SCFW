@@ -297,8 +297,8 @@ bool filter_selectable(struct dirent *dirent) {
 #define GBA_BUS ((vu16*) 0x08000000)
 #define GBA_SRAM ((vu8*) 0x0e000000)
 
-#define SC_FLASH_MAGIC_ADDR_1 (*(vu16*) 0x08000b92)
-#define SC_FLASH_MAGIC_ADDR_2 (*(vu16*) 0x0800046c)
+#define SCLITE_FLASH_MAGIC_ADDR_1 (*(vu16*) 0x08000aaa)
+#define SCLITE_FLASH_MAGIC_ADDR_2 (*(vu16*) 0x08000554)
 #define SC_FLASH_MAGIC_1 ((u16) 0xaa)
 #define SC_FLASH_MAGIC_2 ((u16) 0x55)
 #define SC_FLASH_ERASE ((u16) 0x80)
@@ -315,6 +315,7 @@ enum
 	SC_MEDIA = 0x7,
 	SC_FLASH_RW = 0x4,
 	SC_RAM_RW = 0x5,
+	SC_MODE_FLASH_RW_LITE = 0x1510,
 };
 
 void sc_mode(u32 mode)
@@ -813,11 +814,11 @@ void selectFile(char *path) {
 		REG_IME = 0;
 
 		iprintf("Probing flash ID.\n");
-		sc_mode(SC_FLASH_RW);
-		SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-		SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-		SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
-		u32 flash_id = SC_FLASH_MAGIC_ADDR_1;
+		sc_mode(SC_MODE_FLASH_RW_LITE);
+		SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+		SCLITE_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+		SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_IDENTIFY;
+		u32 flash_id = SCLITE_FLASH_MAGIC_ADDR_1;
 		flash_id |= *GBA_BUS << 16;
 		*GBA_BUS = SC_FLASH_IDLE;
 		iprintf("Flash ID is 0x%x\n", flash_id);
@@ -843,20 +844,20 @@ void selectFile(char *path) {
 			fseek(fw, 0, SEEK_END);
 			u32 fwsize = ftell(fw);
 			fseek(fw, 0, SEEK_SET);
-			if (fwsize > 0x80000) {
+			if (fwsize > 0x7C000) {
 				iprintf("Firmware too large!\n");
 				goto fw_flash_end;
 			}
 
 			ime = 0;
 			iprintf("Erasing flash.\n");
-			sc_mode(SC_FLASH_RW);
-			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-			SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE;
-			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-			SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-			SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE_CHIP;
+			sc_mode(SC_MODE_FLASH_RW_LITE);
+			SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+			SCLITE_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+			SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE;
+			SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+			SCLITE_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+			SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_ERASE_CHIP;
 
 			while (*GBA_BUS != *GBA_BUS) {
 			}
@@ -872,11 +873,11 @@ void selectFile(char *path) {
 					iprintf("Error reading file!\n");
 					goto fw_flash_end;
 				}
-				sc_mode(SC_FLASH_RW);
+				sc_mode(SC_MODE_FLASH_RW_LITE);
 				for (u32 i = 0; i < bytes; i += 2) {
-					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
-					SC_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
-					SC_FLASH_MAGIC_ADDR_1 = SC_FLASH_PROGRAM;
+					SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_MAGIC_1;
+					SCLITE_FLASH_MAGIC_ADDR_2 = SC_FLASH_MAGIC_2;
+					SCLITE_FLASH_MAGIC_ADDR_1 = SC_FLASH_PROGRAM;
 					GBA_BUS[(total_bytes + i)>>1] = filebuf[i] | (filebuf[i+1] << 8);
 
 					while (*GBA_BUS != *GBA_BUS) {
